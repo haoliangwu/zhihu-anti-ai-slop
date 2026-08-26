@@ -75,3 +75,7 @@ docs/images/                   README 截图
 - 架构决策：`docs/adr/`（两级引擎、分数融合等）
 - MVP / P2 规格与实现 ticket：`.scratch/mvp/`、`.scratch/p2/`
 - 商店上架资料：`CHROMEWEBSTORE.md`
+
+## Credits
+
+内置的 21 类 AI 创作痕迹规则（套话连接词、编号式结构、冒号/破折号滥用、英文双引号标注等）在信号分类与判定思路上借鉴了 [stop-slop-zh](https://github.com/pencil20388-eng/stop-slop-zh)（中文版 Stop Slop，灵感源自 [hardikpandya/stop-slop](https://github.com/hardikpandya/stop-slop)）；本地参考副本见 `stop-slop-zh/`（MIT License，仅作规则设计参考，不入库）。
