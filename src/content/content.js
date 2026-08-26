@@ -150,7 +150,7 @@
       // 4) 云端二审（模糊带 + 已配置；经内容侧队列限流，不丢弃；携带一审结果作上下文；
       //    手动"重新判定"时 force=true 强制绕过缓存）
       if (answerId && cloudEligible(rule.score, state.settings)) {
-        const force = state.forceRejudge && state.forceRejudge.delete(answerId);
+        const force = state.forceRejudge.delete(answerId);
         const cloud = await cloudQueue.request(text, rule, force);
         if (cloud) {
           result = {
@@ -192,12 +192,57 @@
 
   const LEVEL_CLASS = { 'confirm-ai': 'zys-level-confirm-ai', 'suspect-ai': 'zys-level-suspect-ai', normal: 'zys-level-normal', skip: 'zys-level-skip' };
 
+  /** 移除卡片上的旧角标/面板/加载占位（重渲染前清理） */
+  function clearCardUI(card) {
+    card.querySelectorAll('.zys-badge, .zys-panel, .zys-rejudging').forEach((el) => el.remove());
+  }
+
+  /** 流式插入：badge 在上、panel 在下、正文被推下（不悬浮遮挡） */
+  function insertBadgePanel(card, badge, panel) {
+    const anchor = card.querySelector(ZD.extract.BODY_SELECTOR);
+    if (anchor) {
+      anchor.insertAdjacentElement('beforebegin', badge);
+      anchor.insertAdjacentElement('beforebegin', panel);
+    } else {
+      card.prepend(badge);
+      card.prepend(panel);
+    }
+  }
+
+  /** 绑定角标点击/回车切换面板 */
+  function bindPanelToggle(badge, panel) {
+    const toggle = () => {
+      panel.hidden = !panel.hidden;
+    };
+    badge.addEventListener('click', toggle);
+    badge.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggle();
+      }
+    });
+  }
+
+  /** 角标分数文案：覆盖显示 人/AI，其余显示分数 */
+  function badgeScoreText(result) {
+    if (result.source !== 'override') return String(result.score);
+    return result.verdict === 'ai' ? 'AI' : '人';
+  }
+
+  /** 角标 meta 文案：已覆盖 / 二审 / N 条痕迹 / 未命中 */
+  function badgeMetaText(result) {
+    if (result.source === 'override') return '已覆盖';
+    if (result.source === 'cloud') return '二审';
+    const count = (result.hits && result.hits.length) || 0;
+    return count > 0 ? `${count} 条痕迹` : '未命中';
+  }
+
   /**
    * 渲染"跳过"角标：回答本身字数少于 minChars，不判定。
    * 与"未命中"区分：跳过 = 太短不判；未命中 = 判了但没命中痕迹。
    */
   function renderSkippedBadge(card, minChars) {
-    card.querySelectorAll('.zys-badge, .zys-rejudging').forEach((el) => el.remove());
+    clearCardUI(card);
     const badge = document.createElement('div');
     badge.className = 'zys-badge zys-level-skip';
     badge.setAttribute('tabindex', '0');
@@ -219,26 +264,8 @@
     p.className = 'zys-empty';
     p.textContent = `回答本身不足 ${minChars} 字，跳过 AI 判定。`;
     panel.appendChild(p);
-    const togglePanel = () => {
-      panel.hidden = !panel.hidden;
-    };
-    badge.addEventListener('click', togglePanel);
-    badge.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        togglePanel();
-      }
-    });
-
-    // 流式插入：badge 在上、panel 在下、正文在下方被推开（不悬浮遮挡）
-    const anchor = card.querySelector(ZD.extract.BODY_SELECTOR);
-    if (anchor) {
-      anchor.insertAdjacentElement('beforebegin', badge);
-      anchor.insertAdjacentElement('beforebegin', panel);
-    } else {
-      card.prepend(badge);
-      card.prepend(panel);
-    }
+    bindPanelToggle(badge, panel);
+    insertBadgePanel(card, badge, panel);
   }
 
   function levelOfResult(result) {
@@ -251,8 +278,7 @@
   }
 
   function renderBadge(card, result) {
-    // 移除旧角标与旧面板
-    card.querySelectorAll('.zys-badge, .zys-panel, .zys-rejudging').forEach((el) => el.remove());
+    clearCardUI(card);
 
     const lv = levelOfResult(result);
     const badge = document.createElement('div');
@@ -262,7 +288,7 @@
 
     const scoreEl = document.createElement('span');
     scoreEl.className = 'zys-score';
-    scoreEl.textContent = result.source === 'override' ? (result.verdict === 'ai' ? 'AI' : '人') : String(result.score);
+    scoreEl.textContent = badgeScoreText(result);
     badge.appendChild(scoreEl);
 
     const labelEl = document.createElement('span');
@@ -270,17 +296,9 @@
     labelEl.textContent = lv.label;
     badge.appendChild(labelEl);
 
-    const reasonCount = (result.hits && result.hits.length) || 0;
     const metaEl = document.createElement('span');
     metaEl.className = 'zys-meta';
-    metaEl.textContent =
-      result.source === 'override'
-        ? '已覆盖'
-        : result.source === 'cloud'
-          ? '二审'
-          : reasonCount > 0
-            ? `${reasonCount} 条痕迹`
-            : '未命中';
+    metaEl.textContent = badgeMetaText(result);
     badge.appendChild(metaEl);
 
     // 理由面板
@@ -359,11 +377,9 @@
     // P1：AI 判定 → 隐藏正文；原因与证据点击角标才展开（所有面板统一收起）
     const bodyEl = card.querySelector(ZD.extract.BODY_SELECTOR);
     const isAiLevel = lv.level === 'confirm-ai' || lv.level === 'suspect-ai';
-    if (bodyEl) {
-      // 每次重渲染重置正文可见性（SPA 重渲染后自动重新应用处置）
-      bodyEl.style.display = isAiLevel && state.settings.hideAiBody ? 'none' : '';
-    }
-    if (isAiLevel && bodyEl && state.settings.hideAiBody) {
+    const hideBody = isAiLevel && state.settings.hideAiBody;
+    if (bodyEl) bodyEl.style.display = hideBody ? 'none' : ''; // 重渲染时重置可见性（SPA 后自动重新应用）
+    if (hideBody && bodyEl) {
       const expandBtn = document.createElement('button');
       expandBtn.type = 'button';
       expandBtn.dataset.zysExpand = '1';
@@ -372,26 +388,8 @@
       panel.appendChild(expandBtn);
     }
 
-    const togglePanel = () => {
-      panel.hidden = !panel.hidden;
-    };
-    badge.addEventListener('click', togglePanel);
-    badge.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault();
-        togglePanel();
-      }
-    });
-
-    // 流式插入：badge 在上、panel 在下、正文在下方被推开（不悬浮遮挡）
-    const anchor = card.querySelector(ZD.extract.BODY_SELECTOR);
-    if (anchor) {
-      anchor.insertAdjacentElement('beforebegin', badge);
-      anchor.insertAdjacentElement('beforebegin', panel);
-    } else {
-      card.prepend(badge);
-      card.prepend(panel);
-    }
+    bindPanelToggle(badge, panel);
+    insertBadgePanel(card, badge, panel);
   }
 
   // ---------- 覆盖操作 ----------
@@ -403,10 +401,8 @@
   async function rejudge(card, answerId) {
     if (!answerId) return;
 
-    // 1) 暂时隐藏旧结果
-    card.querySelectorAll('.zys-badge, .zys-panel, .zys-rejudging').forEach((el) => el.remove());
-
-    // 2) 显示"重新判定中"加载动画
+    // 隐藏旧结果，显示"重新判定中"加载动画
+    clearCardUI(card);
     const loading = document.createElement('div');
     loading.className = 'zys-rejudging';
     const spinner = document.createElement('span');
@@ -420,7 +416,7 @@
     if (anchor) anchor.insertAdjacentElement('beforebegin', loading);
     else card.prepend(loading);
 
-    // 3) 重置状态并重跑（renderBadge 会清理 loading 元素）
+    // 重置分析状态并重跑（renderBadge 会清理 loading）
     state.results.delete(answerId);
     state.analyzed.delete(card);
     state.inFlight.delete(card);
@@ -474,11 +470,20 @@
     const badge = card.querySelector('.zys-badge');
     const answerId = badge ? badge.dataset.zysAid : '';
     if (!answerId) return;
-    const action = btn.dataset.zysAction;
-    if (action === 'human') await applyOverride(card, answerId, 'human');
-    else if (action === 'ai') await applyOverride(card, answerId, 'ai');
-    else if (action === 'clear') await clearOverride(card, answerId);
-    else if (action === 'rejudge') await rejudge(card, answerId);
+    switch (btn.dataset.zysAction) {
+      case 'human':
+        await applyOverride(card, answerId, 'human');
+        break;
+      case 'ai':
+        await applyOverride(card, answerId, 'ai');
+        break;
+      case 'clear':
+        await clearOverride(card, answerId);
+        break;
+      case 'rejudge':
+        await rejudge(card, answerId);
+        break;
+    }
   });
 
   // ---------- 触发：初始 + 滚动 + 消息 ----------
