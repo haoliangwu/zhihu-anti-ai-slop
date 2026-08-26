@@ -155,6 +155,9 @@
       //    手动"重新判定"时 force=true 强制绕过缓存）
       if (answerId && cloudEligible(rule.score, state.settings)) {
         const force = state.forceRejudge.delete(answerId);
+        // 初次分析：二审等待期先渲染轻量"二审中…"角标作为反馈
+        // （手动"重新判定"已有独立大 loading，不重复渲染）
+        if (!force) renderPendingBadge(card, answerId);
         const cloud = await cloudQueue.request(text, rule, force);
         if (cloud) {
           result = {
@@ -252,7 +255,26 @@
   }
 
   /**
-   * 渲染"跳过"角标：回答本身字数少于 minChars，不判定。
+   * 二审进行中的轻量反馈角标：初次分析时规则初审已完成、云端二审尚未返回，
+   * 先渲染"二审中…"（小转圈），二审完成后 renderBadge 会先清理再替换为最终角标。
+   * 不可点击（无面板）；手动"重新判定"走独立的大 loading，不走到这里。
+   */
+  function renderPendingBadge(card, answerId) {
+    clearCardUI(card);
+    const badge = document.createElement('div');
+    badge.className = 'zys-badge zys-pending';
+    badge.dataset.zysAid = answerId || '';
+    const spinner = document.createElement('span');
+    spinner.className = 'zys-spinner zys-spinner-sm';
+    const labelEl = document.createElement('span');
+    labelEl.className = 'zys-level';
+    labelEl.textContent = '二审中…';
+    badge.appendChild(spinner);
+    badge.appendChild(labelEl);
+    insertBeforeBody(card, badge);
+  }
+
+  /** 渲染"跳过"角标：回答本身字数少于 minChars，不判定。
    * 与"未命中"区分：跳过 = 太短不判；未命中 = 判了但没命中痕迹。
    */
   function renderSkippedBadge(card, minChars) {
