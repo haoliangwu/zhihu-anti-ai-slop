@@ -5,6 +5,9 @@
   "description": "在知乎问题页为每条回答给出人类置信度判定，标记疑似 AI 创作，支持查看理由与手动覆盖。",
   "minimum_chrome_version": "109",
   "permissions": ["storage"],
+  "optional_host_permissions": [
+    "https://*/*"
+  ],
   "host_permissions": [
     "https://*.zhihu.com/*",
     "https://api.deepseek.com/*"

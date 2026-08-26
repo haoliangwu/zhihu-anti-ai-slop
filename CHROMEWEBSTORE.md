@@ -62,6 +62,7 @@ Productivity
 | storage | permissions | 保存用户设置（阈值/API 配置）、判定覆盖记录与二审缓存到本机 |
 | https://*.zhihu.com/* | host_permissions | 在知乎问题页注入内容脚本，读取回答正文并在页面上渲染判定角标 |
 | https://api.deepseek.com/* | host_permissions | 云端二审（默认 DeepSeek API）发送模糊带内回答正文，用于 LLM 复核判定 |
+| https://*/* | optional_host_permissions | 用户可配置任意 OpenAI 兼容 API 地址（如 OpenAI/Azure/自建服务）；仅当用户在设置页填入该域名并授权时才生效，用于二审请求 |
 
 ## Privacy & Data Use
 

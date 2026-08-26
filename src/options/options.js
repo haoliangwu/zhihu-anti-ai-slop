@@ -86,6 +86,20 @@
     }, 3000);
   }
 
+  /**
+   * 从 API 地址提取主机权限模式（仅支持 https）。
+   * @returns {string|null} 如 'https://api.openai.com/*'；非法或非 https 返回 null
+   */
+  function hostPatternFromUrl(urlStr) {
+    try {
+      const u = new URL(urlStr);
+      if (u.protocol !== 'https:') return null;
+      return `${u.protocol}//${u.host}/*`;
+    } catch {
+      return null;
+    }
+  }
+
   async function save() {
     const s = collectForm();
     const err = validate(s);
@@ -93,9 +107,29 @@
       setStatus(err, false);
       return;
     }
+
+    // 动态申请自定义 API 域名的主机权限（同步发起 request 以保持用户手势；
+    // 已静态授权/已授权域名直接 resolve，不弹窗）
+    let permNote = '';
+    if (s.cloudEnabled && s.apiKey && s.apiBaseUrl) {
+      const pattern = hostPatternFromUrl(s.apiBaseUrl);
+      if (!pattern) {
+        setStatus('API 地址需为 https:// 协议', false);
+        return;
+      }
+      try {
+        const granted = await chrome.permissions.request({ origins: [pattern] });
+        if (!granted) {
+          permNote = '（未授权 ' + pattern.replace('/*', '') + '，二审将不可用；可在 chrome://extensions 详情页授权）';
+        }
+      } catch {
+        permNote = '（权限申请失败，二审可能不可用）';
+      }
+    }
+
     await ZD.storage.saveSettings(s);
     currentSettings = s;
-    setStatus('已保存', true);
+    setStatus('已保存' + permNote, true);
   }
 
   // ---------- 自定义规则 CRUD ----------
