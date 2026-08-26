@@ -13,9 +13,13 @@
 
 ## 效果一览
 
-| 正常判定 | 短回答跳过 | 疑似 AI（理由面板展开） |
+| 正常判定 | 确定 AI | 短回答跳过 |
 |---|---|---|
-| <img src="docs/images/ok.png" alt="绿色角标：97 正常 · 1 条痕迹" width="300" /> | <img src="docs/images/skip.png" alt="灰色角标：跳过 · 少于 300 字" width="300" /> | <img src="docs/images/ai_slop.png" alt="疑似 AI 角标与展开的理由面板（命中痕迹 + AI/人工倾向证据 + 操作按钮）" width="300" /> |
+| <img src="docs/images/ok.png" alt="绿色角标：97 正常 · 1 条痕迹" width="280" /> | <img src="docs/images/sure.png" alt="红色角标：38 确定 AI · 二审" width="280" /> | <img src="docs/images/skip.png" alt="灰色角标：跳过 · 少于 300 字" width="280" /> |
+
+疑似 AI 回答：理由面板展开（命中痕迹扣分 + AI/人工倾向证据 + 覆盖/重新判定操作）：
+
+<img src="docs/images/suspect.png" alt="橙色角标：70 疑似 AI 二审，展开的理由面板（命中痕迹 + AI/人工倾向证据 + 操作按钮）" width="360" />
 
 设置页（阈值 / 模糊带 / API / 二审权重 / 提示词编辑 / 自定义规则）：
 
