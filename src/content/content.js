@@ -555,6 +555,64 @@
     observer.observe(document.body, { childList: true, subtree: true });
   }
 
+  // ---------- 预加载：提前渲染下一批回答，减少滚动到时的判定延迟 ----------
+  // 知乎懒加载阈值极贴近底部（实测距底部 1.5 屏不触发，滚到底才加载 10 个/批），
+  // 答案进入 viewport 时才刚渲染、分析才开始 → 用户滚到时还在"二审中"。
+  // 策略：用户空闲时周期性"到底部触发加载 → 恢复原位"，屏幕外提前分析；
+  // 用户正在滚动或仍有未分析卡片时跳过，加载完（无新增）后退避重试。
+
+  const preload = {
+    /** 距上次预加载的间隔（ms）：加载成功保持节奏，无更多后退避 */
+    interval: 4_000,
+    /** 无更多后的退避间隔（ms） */
+    IDLE_BACKOFF: 300_000,
+    timer: null,
+    scrolling: false,
+    _scrollEndTimer: null,
+
+    start() {
+      window.addEventListener(
+        'scroll',
+        () => {
+          this.scrolling = true;
+          clearTimeout(this._scrollEndTimer);
+          this._scrollEndTimer = setTimeout(() => {
+            this.scrolling = false;
+          }, 800);
+        },
+        { passive: true }
+      );
+      this.schedule();
+    },
+
+    schedule() {
+      clearTimeout(this.timer);
+      this.timer = setTimeout(() => this.tick(), this.interval);
+    },
+
+    async tick() {
+      // 用户正在滚动：不打扰，顺延
+      if (this.scrolling) {
+        this.schedule();
+        return;
+      }
+      const cards = ZD.extract.findAnswerCards(document);
+      // 已渲染卡片还有未分析的（分析进行中/二审排队）→ 等消化完再预加载
+      if (cards.some((c) => !state.analyzed.has(c))) {
+        this.schedule();
+        return;
+      }
+      const count = cards.length;
+      const y = window.scrollY;
+      window.scrollTo(0, document.body.scrollHeight); // 触发知乎加载更多
+      await sleep(60);
+      const countAfter = ZD.extract.findAnswerCards(document).length;
+      window.scrollTo(0, y); // 恢复原滚动位置（新卡片由 MutationObserver 捕获分析）
+      this.interval = countAfter > count ? 4_000 : this.IDLE_BACKOFF;
+      this.schedule();
+    },
+  };
+
   // 存储变化：覆盖/设置实时生效
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
@@ -584,5 +642,6 @@
     state.overrides = await ZD.storage.getOverrides();
     startObserver();
     analyzeAll();
+    preload.start();
   })();
 })();
