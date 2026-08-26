@@ -19,11 +19,13 @@
     analyzed: new WeakSet(),
     /** 进行中的分析，按卡片去重 */
     inFlight: new Map(),
+    /** 手动"重新判定"的回答 ID 集合（二审强制绕过缓存） */
+    forceRejudge: new Set(),
   };
 
   // ---------- 云端二审请求（内容侧队列：≤2 并发，其余排队，不丢弃） ----------
 
-  function requestSecondOpinion(text, rule) {
+  function requestSecondOpinion(text, rule, force) {
     return new Promise((resolve) => {
       const timer = setTimeout(() => resolve(null), 35_000);
       try {
@@ -34,6 +36,8 @@
             // 一审结果作为上下文传给二审
             ruleScore: rule.score,
             hits: rule.hits.map((h) => ({ id: h.id, name: h.name, deduct: h.deduct })),
+            // 手动"重新判定"时强制绕过缓存重新调用
+            force: !!force,
           },
           (resp) => {
             clearTimeout(timer);
@@ -52,9 +56,9 @@
     queue: [],
     active: 0,
     MAX: 2,
-    request(text, rule) {
+    request(text, rule, force) {
       return new Promise((resolve) => {
-        this.queue.push({ text, rule, resolve });
+        this.queue.push({ text, rule, force, resolve });
         this.pump();
       });
     },
@@ -62,7 +66,7 @@
       while (this.active < this.MAX && this.queue.length) {
         const item = this.queue.shift();
         this.active++;
-        requestSecondOpinion(item.text, item.rule).then((result) => {
+        requestSecondOpinion(item.text, item.rule, item.force).then((result) => {
           this.active--;
           item.resolve(result);
           this.pump();
@@ -143,9 +147,11 @@
         answerId,
       };
 
-      // 4) 云端二审（模糊带 + 已配置；经内容侧队列限流，不丢弃；携带一审结果作上下文）
+      // 4) 云端二审（模糊带 + 已配置；经内容侧队列限流，不丢弃；携带一审结果作上下文；
+      //    手动"重新判定"时 force=true 强制绕过缓存）
       if (answerId && cloudEligible(rule.score, state.settings)) {
-        const cloud = await cloudQueue.request(text, rule);
+        const force = state.forceRejudge && state.forceRejudge.delete(answerId);
+        const cloud = await cloudQueue.request(text, rule, force);
         if (cloud) {
           result = {
             source: 'cloud',
@@ -346,6 +352,7 @@
       mkBtn('认为人工', 'human');
       mkBtn('认为 AI', 'ai');
       if (result.source === 'override') mkBtn('清除覆盖', 'clear');
+      mkBtn('重新判定', 'rejudge');
       panel.appendChild(actions);
     }
 
@@ -388,6 +395,16 @@
   }
 
   // ---------- 覆盖操作 ----------
+
+  /** 手动重新判定：重置该回答的分析状态，强制二审绕过缓存重新调用 */
+  async function rejudge(card, answerId) {
+    if (!answerId) return;
+    state.results.delete(answerId);
+    state.analyzed.delete(card);
+    state.inFlight.delete(card);
+    state.forceRejudge.add(answerId);
+    await analyzeCard(card);
+  }
 
   async function applyOverride(card, answerId, verdict) {
     if (!answerId) return;
@@ -439,6 +456,7 @@
     if (action === 'human') await applyOverride(card, answerId, 'human');
     else if (action === 'ai') await applyOverride(card, answerId, 'ai');
     else if (action === 'clear') await clearOverride(card, answerId);
+    else if (action === 'rejudge') await rejudge(card, answerId);
   });
 
   // ---------- 触发：初始 + 滚动 + 消息 ----------

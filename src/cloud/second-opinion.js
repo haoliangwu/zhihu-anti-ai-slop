@@ -19,23 +19,26 @@ ZD.cloud = {
    * @param {number} tabId
    * @param {object} settings
    * @param {{ruleScore:number, hits:Array<{id:string,name:string,deduct:number}>}} [ruleContext] 一审结果
+   * @param {boolean} [force] 手动"重新判定"：跳过缓存直接调用（结果覆盖写回缓存）
    * @returns {Promise<{score:number, aiSignals:string[], humanSignals:string[], cached?:boolean}|null>}
    */
-  async secondOpinion(text, tabId, settings, ruleContext) {
+  async secondOpinion(text, tabId, settings, ruleContext, force) {
     if (!settings.cloudEnabled || !settings.apiKey) return null;
     if (!text) return null;
 
     // 1) 缓存命中（键 = 正文归一化哈希 + 一审结果摘要 + 融合权重：
-    //    正文/一审判定/权重变化 → 键变化 → 自动重判）
+    //    正文/一审判定/权重变化 → 键变化 → 自动重判；force 时跳过）
     const contentHash = ZD.md5(
       text.replace(/\s+/g, ' ').trim() +
       '|first:' + firstPassSummary(ruleContext) +
       '|w:' + (settings.cloudScoreWeight ?? 0.6)
     );
-    const cache = await ZD.storage.getCache();
-    const cached = cache[contentHash];
-    if (cached && typeof cached.score === 'number') {
-      return { score: cached.score, aiSignals: cached.aiSignals || [], humanSignals: cached.humanSignals || [], cached: true };
+    if (!force) {
+      const cache = await ZD.storage.getCache();
+      const cached = cache[contentHash];
+      if (cached && typeof cached.score === 'number') {
+        return { score: cached.score, aiSignals: cached.aiSignals || [], humanSignals: cached.humanSignals || [], cached: true };
+      }
     }
 
     // 2) 每页预算
