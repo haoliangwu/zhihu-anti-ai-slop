@@ -297,12 +297,18 @@
     }
 
     if (result.cloud) {
-      const cloudEl = document.createElement('div');
-      cloudEl.className = 'zys-cloud';
-      const ai = result.cloud.aiSignals.join('；');
-      const human = result.cloud.humanSignals.join('；');
-      cloudEl.textContent = `二审证据 — AI 倾向：${ai || '无'}；人工倾向：${human || '无'}`;
-      panel.appendChild(cloudEl);
+      // 只渲染有内容的信号；AI/人工倾向均为空则不显示证据块
+      const ai = (result.cloud.aiSignals || []).filter(Boolean);
+      const human = (result.cloud.humanSignals || []).filter(Boolean);
+      if (ai.length || human.length) {
+        const cloudEl = document.createElement('div');
+        cloudEl.className = 'zys-cloud';
+        const parts = [];
+        if (ai.length) parts.push(`AI 倾向：${ai.join('；')}`);
+        if (human.length) parts.push(`人工倾向：${human.join('；')}`);
+        cloudEl.textContent = `二审证据 — ${parts.join('；')}`;
+        panel.appendChild(cloudEl);
+      }
     }
 
     if (result.answerId) {
