@@ -48,7 +48,7 @@
 
 /* 理由面板：流式展开（badge 下方的独立块，把正文推下去，不悬浮遮挡） */
 .zys-panel {
-  width: 100%;
+  width: min(360px, 100%);
   margin: 6px 0 2px;
   padding: 12px;
   border-radius: 8px;
