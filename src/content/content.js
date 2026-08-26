@@ -23,12 +23,18 @@
 
   // ---------- 云端二审请求（内容侧队列：≤2 并发，其余排队，不丢弃） ----------
 
-  function requestSecondOpinion(text) {
+  function requestSecondOpinion(text, rule) {
     return new Promise((resolve) => {
       const timer = setTimeout(() => resolve(null), 35_000);
       try {
         chrome.runtime.sendMessage(
-          { type: ZD.MSG.SECOND_OPINION, text },
+          {
+            type: ZD.MSG.SECOND_OPINION,
+            text,
+            // 一审结果作为上下文传给二审
+            ruleScore: rule.score,
+            hits: rule.hits.map((h) => ({ id: h.id, name: h.name, deduct: h.deduct })),
+          },
           (resp) => {
             clearTimeout(timer);
             if (chrome.runtime.lastError) return resolve(null);
@@ -46,9 +52,9 @@
     queue: [],
     active: 0,
     MAX: 2,
-    request(text) {
+    request(text, rule) {
       return new Promise((resolve) => {
-        this.queue.push({ text, resolve });
+        this.queue.push({ text, rule, resolve });
         this.pump();
       });
     },
@@ -56,7 +62,7 @@
       while (this.active < this.MAX && this.queue.length) {
         const item = this.queue.shift();
         this.active++;
-        requestSecondOpinion(item.text).then((result) => {
+        requestSecondOpinion(item.text, item.rule).then((result) => {
           this.active--;
           item.resolve(result);
           this.pump();
@@ -137,9 +143,9 @@
         answerId,
       };
 
-      // 4) 云端二审（模糊带 + 已配置；经内容侧队列限流，不丢弃）
+      // 4) 云端二审（模糊带 + 已配置；经内容侧队列限流，不丢弃；携带一审结果作上下文）
       if (answerId && cloudEligible(rule.score, state.settings)) {
-        const cloud = await cloudQueue.request(text);
+        const cloud = await cloudQueue.request(text, rule);
         if (cloud) {
           result = {
             source: 'cloud',

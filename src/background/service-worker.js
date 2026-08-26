@@ -33,7 +33,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     try {
       const tabId = (sender.tab && sender.tab.id) || 0;
       const settings = await ZD.storage.getSettings();
-      const result = await ZD.cloud.secondOpinion(message.text, tabId, settings);
+      const ruleContext = {
+        ruleScore: message.ruleScore,
+        hits: message.hits || [],
+      };
+      const result = await ZD.cloud.secondOpinion(message.text, tabId, settings, ruleContext);
       if (!result) {
         sendResponse({ ok: false });
         return;

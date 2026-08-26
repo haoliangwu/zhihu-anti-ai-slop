@@ -13,16 +13,20 @@ ZD.cloud = {
   inFlight: 0,
 
   /**
-   * 二审入口：缓存（按正文 MD5 哈希，内容更新自动失效）→ 预算/并发 → 调用 API → 写缓存。
+   * 二审入口：缓存（键 = 正文归一化哈希 + 一审结果摘要）→ 预算/并发 → 调用 API → 写缓存。
+   * @param {string} text 正文
+   * @param {number} tabId
+   * @param {object} settings
+   * @param {{ruleScore:number, hits:Array<{id:string,name:string,deduct:number}>}} [ruleContext] 一审结果
    * @returns {Promise<{score:number, aiSignals:string[], humanSignals:string[], cached?:boolean}|null>}
    */
-  async secondOpinion(text, tabId, settings) {
+  async secondOpinion(text, tabId, settings, ruleContext) {
     if (!settings.cloudEnabled || !settings.apiKey) return null;
     if (!text) return null;
 
-    // 1) 缓存命中（键 = 正文归一化哈希：折叠空白消除 DOM 空白差异噪声；
-    //    作者编辑回答后文本变化 → 哈希变化 → 自动重判）
-    const contentHash = ZD.md5(text.replace(/\s+/g, ' ').trim());
+    // 1) 缓存命中（键 = 正文归一化哈希 + 一审结果摘要：
+    //    正文或一审判定变化 → 键变化 → 自动重判；二审必须看到一审结果）
+    const contentHash = ZD.md5(text.replace(/\s+/g, ' ').trim() + '|first:' + firstPassSummary(ruleContext));
     const cache = await ZD.storage.getCache();
     const cached = cache[contentHash];
     if (cached && typeof cached.score === 'number') {
@@ -40,7 +44,7 @@ ZD.cloud = {
     try {
       // 先记预算（无论成败都算一次调用，保护成本）
       await ZD.storage.setBudget(tabId, { used: budget.used + 1, ts: Date.now() });
-      const result = await callApi(text, settings);
+      const result = await callApi(text, settings, ruleContext);
       if (!result) return null;
       await ZD.storage.setCacheEntry(contentHash, { ...result, ts: Date.now() });
       return result;
@@ -50,8 +54,15 @@ ZD.cloud = {
   },
 };
 
+/** 一审结果摘要（用于缓存键：规则分 + 命中规则 id，排序保证稳定） */
+function firstPassSummary(ruleContext) {
+  if (!ruleContext) return '';
+  const ids = (ruleContext.hits || []).map((h) => h.id).sort().join(',');
+  return `${ruleContext.ruleScore}:${ids}`;
+}
+
 /** 调用 OpenAI 兼容 /chat/completions，解析并归一化为人类置信度 */
-async function callApi(text, settings) {
+async function callApi(text, settings, ruleContext) {
   const baseUrl = settings.apiBaseUrl.replace(/\/+$/, '');
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), ZD.CLOUD_TIMEOUT_MS);
@@ -67,7 +78,7 @@ async function callApi(text, settings) {
         messages: [
           // 用户可编辑提示词；未设置（''）时用内置默认
           { role: 'system', content: settings.judgePrompt || ZD.CLOUD_SYSTEM_PROMPT },
-          { role: 'user', content: `正文：\n${text}` },
+          { role: 'user', content: buildUserMessage(text, ruleContext) },
         ],
         temperature: 0,
         response_format: { type: 'json_object' },
@@ -96,5 +107,25 @@ async function callApi(text, settings) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** 组装 user 消息：一审（规则引擎）结果 + 待复核正文 */
+function buildUserMessage(text, ruleContext) {
+  const parts = [];
+  if (ruleContext) {
+    parts.push('【一审（规则引擎）结果】');
+    parts.push(`规则分（人类置信度）：${ruleContext.ruleScore} / 100`);
+    const hits = ruleContext.hits || [];
+    if (hits.length) {
+      parts.push('命中的 AI 创作痕迹：');
+      hits.forEach((h) => parts.push(`- ${h.name} -${h.deduct} 分`));
+    } else {
+      parts.push('未命中任何 AI 创作痕迹。');
+    }
+    parts.push('');
+    parts.push('【待复核正文】');
+  }
+  parts.push(text);
+  return parts.join('\n');
 }
 })();
