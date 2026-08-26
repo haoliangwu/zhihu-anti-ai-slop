@@ -570,9 +570,12 @@
 
   const preload = {
     /** 距上次预加载的间隔（ms）：加载成功保持节奏，无更多后退避 */
-    interval: 4_000,
+    interval: 8_000,
     /** 无更多后的退避间隔（ms） */
     IDLE_BACKOFF: 300_000,
+    /** 滚动到底的停留时长（ms）：实测知乎加载触发仅需 ~50ms 停留，
+     *  越短用户越无感（避免页面闪动） */
+    TRIGGER_HOLD_MS: 80,
     timer: null,
     scrolling: false,
     _scrollEndTimer: null,
@@ -628,11 +631,14 @@
       window.scrollTo(0, document.body.scrollHeight); // 触发知乎加载更多
       // 知乎懒加载监听 scroll 事件：程序化 scrollTo 本身不触发其加载逻辑，需补发
       window.dispatchEvent(new Event('scroll'));
-      // 等待新卡片渲染：实测知乎加载一批约 400ms，留余量再检查
+      // 短暂停留触发加载后立即恢复原位（停留越短越无感；实测 ~50ms 足够触发，
+      // 知乎在恢复后仍会后台加载渲染新卡片）
+      await sleep(this.TRIGGER_HOLD_MS);
+      window.scrollTo(0, y);
+      // 等新卡片渲染（加载请求约 400ms）
       await sleep(500);
       const countAfter = ZD.extract.findAnswerCards(document).length;
-      window.scrollTo(0, y); // 恢复原滚动位置（新卡片由 MutationObserver 捕获分析）
-      this.interval = countAfter > count ? 4_000 : this.IDLE_BACKOFF;
+      this.interval = countAfter > count ? 8_000 : this.IDLE_BACKOFF;
       this.schedule();
     },
   };
