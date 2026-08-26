@@ -303,16 +303,29 @@
     }
 
     if (result.cloud) {
-      // 只渲染有内容的信号；AI/人工倾向均为空则不显示证据块
+      // 只渲染有内容的信号；AI/人工倾向均为空则不显示证据块。
+      // 分段标识：每类倾向一个区块标题 + 逐条列表，便于审查。
       const ai = (result.cloud.aiSignals || []).filter(Boolean);
       const human = (result.cloud.humanSignals || []).filter(Boolean);
       if (ai.length || human.length) {
         const cloudEl = document.createElement('div');
         cloudEl.className = 'zys-cloud';
-        const parts = [];
-        if (ai.length) parts.push(`AI 倾向：${ai.join('；')}`);
-        if (human.length) parts.push(`人工倾向：${human.join('；')}`);
-        cloudEl.textContent = `二审证据 — ${parts.join('；')}`;
+        const addSection = (title, items) => {
+          const t = document.createElement('div');
+          t.className = 'zys-evidence-title';
+          t.textContent = title;
+          cloudEl.appendChild(t);
+          const ul = document.createElement('ul');
+          ul.className = 'zys-evidence-list';
+          items.forEach((s) => {
+            const li = document.createElement('li');
+            li.textContent = s;
+            ul.appendChild(li);
+          });
+          cloudEl.appendChild(ul);
+        };
+        if (ai.length) addSection('AI 倾向', ai);
+        if (human.length) addSection('人工倾向', human);
         panel.appendChild(cloudEl);
       }
     }
