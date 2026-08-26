@@ -1,6 +1,9 @@
 # macOS
 .DS_Store
 
+# 工具临时目录（vision toolkit 等）
+.dsh-vision-toolkit/
+
 # Node
 node_modules/
 *.log
