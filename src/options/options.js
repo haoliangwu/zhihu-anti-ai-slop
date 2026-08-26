@@ -303,24 +303,29 @@
     setStatus('二审缓存已清除', true);
   }
 
-  async function reanalyze() {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!tab) {
-      setStatus('未找到当前标签页', false);
-      return;
-    }
-    try {
-      await chrome.tabs.sendMessage(tab.id, { type: ZD.MSG.REANALYZE });
-      setStatus('已触发重新分析', true);
-    } catch {
-      setStatus('当前页面不是知乎问题页，或内容脚本未就绪', false);
-    }
+  /**
+   * 重置配置：全部设置项恢复默认（含 API Key / 自定义规则 / 二审提示词）。
+   * 不影响覆盖记录与二审缓存（属用户数据，非配置）。需二次确认。
+   */
+  async function resetSettings() {
+    const ok = confirm(
+      '确定要将所有配置恢复为默认值吗？\n\n' +
+        '将重置：判定阈值、模糊带、API 地址与 Key、模型、每页调用上限、二审权重、\n' +
+        '输入窗口、自定义规则、二审提示词等全部设置项。\n' +
+        '不影响：回答覆盖记录与二审缓存。\n\n' +
+        '此操作不可撤销，确定继续？'
+    );
+    if (!ok) return;
+    currentSettings = { ...ZD.DEFAULTS };
+    await ZD.storage.saveSettings(currentSettings);
+    fillForm(currentSettings);
+    setStatus('已重置为默认配置', true);
   }
 
   // ---------- 事件绑定 ----------
 
   $('saveBtn').addEventListener('click', save);
-  $('reanalyzeBtn').addEventListener('click', reanalyze);
+  $('resetBtn').addEventListener('click', resetSettings);
   $('toggleKey').addEventListener('click', () => {
     const key = $('apiKey');
     const show = key.type === 'password';

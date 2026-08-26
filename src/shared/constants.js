@@ -43,7 +43,6 @@ Object.assign(globalThis.ZhihuDetector, {
   /** 消息类型 */
   MSG: {
     SECOND_OPINION: 'SECOND_OPINION',
-    REANALYZE: 'REANALYZE',
   },
 
   /** 判定结论取值（覆盖记录 / 二审输出 / 消息统一使用，避免散落字面量） */

@@ -138,6 +138,18 @@ button.primary:hover { background: #0f55e8; }
   font-size: 14px;
 }
 
+/* 危险操作（重置配置） */
+button.danger {
+  padding: 8px 14px;
+  border: 1px solid #e64340;
+  border-radius: 8px;
+  background: #fff;
+  color: #e64340;
+  cursor: pointer;
+  font-size: 14px;
+}
+button.danger:hover { background: #fdf0ef; }
+
 .status { font-size: 13px; margin-left: 4px; }
 .status.ok { color: #0a8f4e; }
 .status.err { color: #d93026; }

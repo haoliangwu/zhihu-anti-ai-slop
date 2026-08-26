@@ -533,15 +533,6 @@
     observer.observe(document.body, { childList: true, subtree: true });
   }
 
-  // 消息：选项页"重新分析当前页"
-  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (message && message.type === ZD.MSG.REANALYZE) {
-      state.analyzed = new WeakSet();
-      analyzeAll();
-      sendResponse({ ok: true });
-    }
-  });
-
   // 存储变化：覆盖/设置实时生效
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
