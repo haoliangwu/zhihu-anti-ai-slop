@@ -151,10 +151,14 @@
         answerId,
       };
 
-      // 5) 云端二审（模糊带 + 已配置；经内容侧队列限流，不丢弃；携带一审结果作上下文；
-      //    手动"重新判定"时 force=true 强制绕过缓存）
-      if (answerId && cloudEligible(rule.score, state.settings)) {
-        const force = state.forceRejudge.delete(answerId);
+      // 5) 云端二审：已配置 API 且（手动"重新判定"强制 或 分数落入模糊带）。
+      //    经内容侧队列限流，不丢弃；携带一审结果作上下文。
+      //    手动"重新判定"（force）：一审为正则匹配、幂等，重跑必然同分且
+      //    正常（>模糊带上限）回答原不会进二审 → 强制二审绕过模糊带与缓存，
+      //    得到新的 judge 结论（force 也用于二审侧跳过缓存读）
+      const force = state.forceRejudge.delete(answerId);
+      const cloudOn = state.settings.cloudEnabled && !!state.settings.apiKey;
+      if (answerId && cloudOn && (force || cloudEligible(rule.score, state.settings))) {
         // 初次分析：二审等待期先渲染轻量"二审中…"角标作为反馈
         // （手动"重新判定"已有独立大 loading，不重复渲染）
         if (!force) renderPendingBadge(card, answerId);
