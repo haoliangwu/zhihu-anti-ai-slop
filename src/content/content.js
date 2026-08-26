@@ -333,23 +333,20 @@
       panel.appendChild(actions);
     }
 
-    // P1：AI 判定 → 隐藏正文 + 原因与证据默认可见
+    // P1：AI 判定 → 隐藏正文；原因与证据点击角标才展开（所有面板统一收起）
     const bodyEl = card.querySelector(ZD.extract.BODY_SELECTOR);
     const isAiLevel = lv.level === 'confirm-ai' || lv.level === 'suspect-ai';
     if (bodyEl) {
       // 每次重渲染重置正文可见性（SPA 重渲染后自动重新应用处置）
       bodyEl.style.display = isAiLevel && state.settings.hideAiBody ? 'none' : '';
     }
-    if (isAiLevel) {
-      panel.hidden = false; // 直接渲染原因与证据，无需点击
-      if (bodyEl && state.settings.hideAiBody) {
-        const expandBtn = document.createElement('button');
-        expandBtn.type = 'button';
-        expandBtn.dataset.zysExpand = '1';
-        expandBtn.textContent = '展开原文';
-        expandBtn.className = 'zys-expand-btn';
-        panel.appendChild(expandBtn);
-      }
+    if (isAiLevel && bodyEl && state.settings.hideAiBody) {
+      const expandBtn = document.createElement('button');
+      expandBtn.type = 'button';
+      expandBtn.dataset.zysExpand = '1';
+      expandBtn.textContent = '展开原文';
+      expandBtn.className = 'zys-expand-btn';
+      panel.appendChild(expandBtn);
     }
 
     badge.addEventListener('click', () => {

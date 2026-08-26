@@ -46,9 +46,12 @@
 .zys-level-normal     { color: #0a8f4e; background: rgba(10, 143, 78, 0.08); border-color: rgba(10, 143, 78, 0.22); }
 .zys-level-skip       { color: #8590a6; background: rgba(133, 144, 166, 0.1);  border-color: rgba(133, 144, 166, 0.18); }
 
-/* 理由面板：流式展开（badge 下方的独立块，把正文推下去，不悬浮遮挡） */
+/* 理由面板：流式展开（badge 下方的独立块，把正文推下去，不悬浮遮挡）；
+ * 宽度自适应：跟随内容，短内容收窄、长内容封顶 560px，不超容器 */
 .zys-panel {
-  width: min(360px, 100%);
+  width: fit-content;
+  min-width: 320px;
+  max-width: min(560px, 100%);
   margin: 6px 0 2px;
   padding: 12px;
   border-radius: 8px;
