@@ -187,5 +187,56 @@ ZD.traces = [
       return m && m.length >= 2 ? 1 : 0;
     },
   },
+  {
+    id: 'colon-overuse',
+    name: '冒号滥用',
+    weight: 3,
+    cap: 2,
+    test(t) {
+      // AI 用冒号引出解释/列举/定义（stop-slop-zh：冒号全文命中应为 0）
+      const m = t.match(/：/g);
+      return m ? m.length : 0;
+    },
+  },
+  {
+    id: 'straight-quote',
+    name: '英文双引号标注',
+    weight: 3,
+    cap: 2,
+    test(t) {
+      // AI 用 " " 标注概念/术语，人类倾向用「」或不加
+      const m = t.match(/[""]/g);
+      return m ? m.length : 0;
+    },
+  },
+  {
+    id: 'fake-colloquial',
+    name: '伪口语',
+    weight: 5,
+    cap: 1,
+    test(t) {
+      return /(那么问题来了|你可能会问|这就引出了一个问题|答案可能出乎你的意料|让我们来看看)/.test(t) ? 1 : 0;
+    },
+  },
+  {
+    id: 'hollow-summary',
+    name: '空洞归纳',
+    weight: 4,
+    cap: 1,
+    test(t) {
+      return /(这意味着|这说明了什么|意味着什么|一言以蔽之)/.test(t) ? 1 : 0;
+    },
+  },
+  {
+    id: 'numbered-list',
+    name: '编号式结构',
+    weight: 3,
+    cap: 2,
+    test(t) {
+      // 第一…第二…第三 / 判断一 / 其一其二（stop-slop-zh：编号式是明显 AI 信号）
+      const m = t.match(/(第一[，,、]|第二[，,、]|第三[，,、]|判断[一二三四五六]|其一|其二|其三)/g);
+      return m ? m.length : 0;
+    },
+  },
 ];
 })();
