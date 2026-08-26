@@ -4,8 +4,8 @@
  * 限流：每页（按 tab）调用上限、全局并发上限、单次 30s 超时。
  * 任何失败返回 null，由内容脚本回落规则分。
  */
+(() => {
 'use strict';
-
 const ZD = globalThis.ZhihuDetector;
 
 ZD.cloud = {
@@ -94,3 +94,4 @@ async function callApi(text, settings) {
     clearTimeout(timer);
   }
 }
+})();

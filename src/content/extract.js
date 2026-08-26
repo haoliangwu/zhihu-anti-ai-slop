@@ -3,8 +3,8 @@
  * 选择器集中于此文件维护（知乎类名常变，单点修复）。
  * 依赖：constants.js（先加载）。
  */
+(() => {
 'use strict';
-
 const ZD = globalThis.ZhihuDetector;
 
 ZD.extract = {
@@ -81,3 +81,4 @@ ZD.extract = {
     return body;
   },
 };
+})();

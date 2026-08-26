@@ -3,8 +3,8 @@
  * 依赖：constants.js（先加载）。
  * 提供：设置读写、覆盖读写、二审缓存读写。
  */
+(() => {
 'use strict';
-
 const ZD = globalThis.ZhihuDetector;
 const { KEYS, DEFAULTS } = ZD;
 
@@ -75,3 +75,4 @@ ZD.storage = {
     await chrome.storage.session.set({ [KEYS.BUDGET]: budgets });
   },
 };
+})();

@@ -21,7 +21,7 @@
     inFlight: new Map(),
   };
 
-  // ---------- 云端二审请求 ----------
+  // ---------- 云端二审请求（内容侧队列：≤2 并发，其余排队，不丢弃） ----------
 
   function requestSecondOpinion(answerId, text) {
     return new Promise((resolve) => {
@@ -41,6 +41,29 @@
       }
     });
   }
+
+  const cloudQueue = {
+    queue: [],
+    active: 0,
+    MAX: 2,
+    request(answerId, text) {
+      return new Promise((resolve) => {
+        this.queue.push({ answerId, text, resolve });
+        this.pump();
+      });
+    },
+    pump() {
+      while (this.active < this.MAX && this.queue.length) {
+        const item = this.queue.shift();
+        this.active++;
+        requestSecondOpinion(item.answerId, item.text).then((result) => {
+          this.active--;
+          item.resolve(result);
+          this.pump();
+        });
+      }
+    },
+  };
 
   // ---------- 分析管线 ----------
 
@@ -92,9 +115,9 @@
         answerId,
       };
 
-      // 3) 云端二审（模糊带 + 已配置）
+      // 3) 云端二审（模糊带 + 已配置；经内容侧队列限流，不丢弃）
       if (answerId && cloudEligible(rule.score, state.settings)) {
-        const cloud = await requestSecondOpinion(answerId, text);
+        const cloud = await cloudQueue.request(answerId, text);
         if (cloud) {
           result = {
             source: 'cloud',

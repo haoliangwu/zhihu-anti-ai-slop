@@ -4,8 +4,8 @@
  * 每条痕迹：{ id, name, weight(每次命中扣分), cap(计入扣分的命中上限), test(text)->命中次数 }
  * 依赖：constants.js（先加载）。
  */
+(() => {
 'use strict';
-
 const ZD = globalThis.ZhihuDetector;
 ZD.traces = [
   {
@@ -188,3 +188,4 @@ ZD.traces = [
     },
   },
 ];
+})();

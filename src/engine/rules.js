@@ -4,8 +4,8 @@
  * 输出 { score, hits }，hits 为命中清单（用于"点击看理由"）。
  * 依赖：constants.js、traces.js（先加载）。
  */
+(() => {
 'use strict';
-
 const ZD = globalThis.ZhihuDetector;
 
 ZD.engine = {
@@ -38,3 +38,4 @@ ZD.engine = {
     return { level: 'normal', label: '正常' };
   },
 };
+})();
