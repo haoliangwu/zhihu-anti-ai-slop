@@ -252,6 +252,20 @@
     }
   }
 
+  // ---------- 二审缓存管理 ----------
+
+  async function renderCacheInfo() {
+    const cache = await ZD.storage.getCache();
+    const el = $('cacheInfo');
+    if (el) el.textContent = `二审缓存 ${Object.keys(cache).length} 条（按内容哈希，回答被编辑或规则/权重变化自动失效）`;
+  }
+
+  async function clearCache() {
+    await chrome.storage.local.remove(ZD.KEYS.CACHE);
+    await renderCacheInfo();
+    setStatus('二审缓存已清除', true);
+  }
+
   async function reanalyze() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab) {
@@ -281,15 +295,17 @@
     setStatus('已恢复默认提示词（保存后生效）', true);
   });
   $('addTraceBtn').addEventListener('click', addTrace);
+  $('clearCacheBtn').addEventListener('click', clearCache);
   $('cloudScoreWeight').addEventListener('input', () => {
     $('cloudScoreWeightVal').textContent = $('cloudScoreWeight').value + '%';
   });
 
-  // 存储变化：其他页面修改设置/覆盖时同步刷新
+  // 存储变化：其他页面修改设置/覆盖/缓存时同步刷新
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
     if (changes[ZD.KEYS.SETTINGS]) fillForm(changes[ZD.KEYS.SETTINGS].newValue || ZD.DEFAULTS);
     if (changes[ZD.KEYS.OVERRIDES]) renderOverrides();
+    if (changes[ZD.KEYS.CACHE]) renderCacheInfo();
   });
 
   // ---------- 启动 ----------
@@ -298,5 +314,6 @@
     const settings = await ZD.storage.getSettings();
     fillForm(settings);
     await renderOverrides();
+    await renderCacheInfo();
   })();
 })();

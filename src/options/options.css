@@ -239,3 +239,15 @@ button.primary.small {
   flex: 1;
   width: auto;
 }
+
+/* 数据管理行 */
+.data-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #f0f2f4;
+}
+.data-actions .hint { margin: 0; }
