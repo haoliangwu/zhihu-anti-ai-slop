@@ -100,3 +100,19 @@
 .zys-actions button:hover {
   background: #f0f0f0;
 }
+
+/* P1：展开原文按钮 */
+.zys-expand-btn {
+  margin-top: 8px;
+  padding: 3px 10px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  background: #fafafa;
+  color: #333;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.zys-expand-btn:hover {
+  background: #f0f0f0;
+}

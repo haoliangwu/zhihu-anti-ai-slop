@@ -11,7 +11,7 @@ body {
 }
 
 .wrap {
-  max-width: 560px;
+  max-width: 720px;
   margin: 0 auto;
   padding: 20px 16px 40px;
 }
@@ -141,3 +141,63 @@ button.primary:hover { background: #0f55e8; }
 .status { font-size: 13px; margin-left: 4px; }
 .status.ok { color: #0a8f4e; }
 .status.err { color: #d93026; }
+
+/* SPA 页面头部 */
+.page-head { margin-bottom: 14px; }
+.page-head h1 { margin-bottom: 4px; }
+.page-head .hint { margin: 0; }
+
+/* 文本域 */
+.field-block { margin-top: 12px; }
+.field-block > label { font-size: 13px; font-weight: 600; }
+textarea {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #d0d4da;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  line-height: 1.5;
+  resize: vertical;
+  margin: 6px 0;
+}
+
+/* 自定义规则 */
+.trace-list {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+}
+.trace-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid #f0f2f4;
+}
+.trace-list .ov-info {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  word-break: break-all;
+}
+.trace-form {
+  margin-top: 12px;
+  padding: 12px;
+  background: #fafbfc;
+  border: 1px dashed #d0d4da;
+  border-radius: 8px;
+}
+.trace-form h3 { font-size: 13px; margin: 0 0 8px; }
+.grid3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 0 16px;
+  align-items: end;
+}
+button.primary.small {
+  padding: 6px 14px;
+  font-size: 13px;
+}
+.trace-form .row input[type="number"],
+.trace-form .row input[type="text"] { width: 100%; }

@@ -65,7 +65,8 @@ async function callApi(text, settings) {
       body: JSON.stringify({
         model: settings.apiModel,
         messages: [
-          { role: 'system', content: ZD.CLOUD_SYSTEM_PROMPT },
+          // 用户可编辑提示词；未设置（''）时用内置默认
+          { role: 'system', content: settings.judgePrompt || ZD.CLOUD_SYSTEM_PROMPT },
           { role: 'user', content: `正文：\n${text}` },
         ],
         temperature: 0,

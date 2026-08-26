@@ -11,13 +11,25 @@ const ZD = globalThis.ZhihuDetector;
 ZD.engine = {
   /**
    * @param {string} text 输入窗口文本
+   * @param {Array<{id,name,pattern,weight,cap}>} [extraTraces] 用户自定义正则规则
    * @returns {{ score: number, hits: Array<{id,name,deduct,count}> }}
    */
-  score(text) {
+  score(text, extraTraces) {
     const hits = [];
     let total = 0;
-    for (const trace of ZD.traces) {
-      const count = trace.test(text);
+    const all = extraTraces && extraTraces.length ? [...ZD.traces, ...extraTraces] : ZD.traces;
+    for (const trace of all) {
+      let count = 0;
+      if (typeof trace.test === 'function') {
+        count = trace.test(text);
+      } else if (trace.pattern) {
+        // 用户自定义规则：正则全局匹配计数；无效正则在保存时已被拦截，此处兜底忽略
+        try {
+          count = (text.match(new RegExp(trace.pattern, 'g')) || []).length;
+        } catch {
+          count = 0;
+        }
+      }
       if (count > 0) {
         const capped = Math.min(count, trace.cap);
         const deduct = capped * trace.weight;

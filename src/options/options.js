@@ -1,6 +1,8 @@
 /**
- * 知乎照妖镜 — 选项页逻辑
+ * 知乎照妖镜 — 选项页（SPA）逻辑
  * 依赖：constants.js、storage.js（按 HTML 顺序加载）。
+ * 配置项：阈值 / 模糊带 / API（key 掩码）/ 二审提示词 / 输入窗口 /
+ *         AI 隐藏正文 / 自定义正则规则（CRUD + 校验）/ 覆盖管理。
  */
 'use strict';
 
@@ -22,6 +24,7 @@
   ];
 
   let currentSettings = { ...ZD.DEFAULTS };
+  let traceDraftId = 0; // 新增规则的临时 id（保存时替换为时间戳 id）
 
   function fillForm(settings) {
     currentSettings = settings;
@@ -31,6 +34,9 @@
     $('cloudEnabled').checked = !!settings.cloudEnabled;
     $('apiKey').value = settings.apiKey || '';
     $('windowMode').value = settings.windowMode || 'full';
+    $('hideAiBody').checked = settings.hideAiBody !== false;
+    $('judgePrompt').value = settings.judgePrompt || '';
+    renderTraces(settings.customTraces || []);
   }
 
   function collectForm() {
@@ -43,6 +49,9 @@
     s.cloudEnabled = $('cloudEnabled').checked;
     s.apiKey = $('apiKey').value.trim();
     s.windowMode = $('windowMode').value;
+    s.hideAiBody = $('hideAiBody').checked;
+    s.judgePrompt = $('judgePrompt').value.trim();
+    s.customTraces = collectTraces();
     return s;
   }
 
@@ -55,6 +64,13 @@
     }
     if (s.cloudEnabled && !s.apiKey) {
       return '启用云端二审时需填写 API Key';
+    }
+    for (const t of s.customTraces) {
+      try {
+        new RegExp(t.pattern);
+      } catch {
+        return `自定义规则"${t.name}"的正则无效：${t.pattern}`;
+      }
     }
     return null;
   }
@@ -81,6 +97,75 @@
     currentSettings = s;
     setStatus('已保存', true);
   }
+
+  // ---------- 自定义规则 CRUD ----------
+
+  function renderTraces(traces) {
+    const list = $('traceList');
+    const empty = $('traceEmpty');
+    list.textContent = '';
+    empty.hidden = traces.length > 0;
+    for (const t of traces) {
+      const li = document.createElement('li');
+      const info = document.createElement('span');
+      info.className = 'ov-info';
+      info.textContent = `${t.name} — /${t.pattern}/ × ${t.weight} 分（上限 ${t.cap} 次）`;
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'mini';
+      del.textContent = '删除';
+      del.addEventListener('click', () => {
+        const next = (currentSettings.customTraces || []).filter((x) => x.id !== t.id);
+        currentSettings.customTraces = next;
+        renderTraces(next);
+      });
+      li.appendChild(info);
+      li.appendChild(del);
+      list.appendChild(li);
+    }
+  }
+
+  function collectTraces() {
+    return currentSettings.customTraces || [];
+  }
+
+  function addTrace() {
+    const name = $('traceName').value.trim();
+    const pattern = $('tracePattern').value.trim();
+    const weight = Number($('traceWeight').value);
+    const cap = Number($('traceCap').value);
+    const errEl = $('traceError');
+
+    if (!name || !pattern) {
+      errEl.textContent = '名称与正则均不能为空';
+      errEl.hidden = false;
+      return;
+    }
+    try {
+      new RegExp(pattern); // 语法校验
+    } catch (e) {
+      errEl.textContent = `正则无效：${e.message}`;
+      errEl.hidden = false;
+      return;
+    }
+    if (!Number.isFinite(weight) || weight < 1 || !Number.isFinite(cap) || cap < 1) {
+      errEl.textContent = '扣分与上限需为正整数';
+      errEl.hidden = false;
+      return;
+    }
+
+    errEl.hidden = true;
+    traceDraftId++;
+    const trace = { id: `custom-${Date.now()}-${traceDraftId}`, name, pattern, weight, cap };
+    const next = [...(currentSettings.customTraces || []), trace];
+    currentSettings.customTraces = next;
+    renderTraces(next);
+    // 清空表单
+    $('traceName').value = '';
+    $('tracePattern').value = '';
+  }
+
+  // ---------- 覆盖管理 ----------
 
   async function renderOverrides() {
     const overrides = await ZD.storage.getOverrides();
@@ -133,6 +218,11 @@
     key.type = show ? 'text' : 'password';
     $('toggleKey').textContent = show ? '隐藏' : '显示';
   });
+  $('resetPrompt').addEventListener('click', () => {
+    $('judgePrompt').value = '';
+    setStatus('已恢复内置默认提示词（保存后生效）', true);
+  });
+  $('addTraceBtn').addEventListener('click', addTrace);
 
   // 存储变化：其他页面修改设置/覆盖时同步刷新
   chrome.storage.onChanged.addListener((changes, area) => {

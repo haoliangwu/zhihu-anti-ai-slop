@@ -22,6 +22,11 @@ chrome.runtime.onInstalled.addListener(async () => {
   }
 });
 
+// 点击工具栏图标 → 打开完整 SPA 设置页（已去掉 default_popup）
+chrome.action.onClicked.addListener(() => {
+  chrome.runtime.openOptionsPage();
+});
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message || message.type !== ZD.MSG.SECOND_OPINION) return undefined;
   (async () => {

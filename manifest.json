@@ -28,12 +28,11 @@
     }
   ],
   "action": {
-    "default_title": "知乎照妖镜",
-    "default_popup": "src/options/options.html"
+    "default_title": "知乎照妖镜"
   },
   "options_ui": {
     "page": "src/options/options.html",
-    "open_in_tab": false
+    "open_in_tab": true
   },
   "icons": {
     "16": "icons/icon-16.png",

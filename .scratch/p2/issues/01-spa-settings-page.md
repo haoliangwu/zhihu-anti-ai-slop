@@ -1,7 +1,11 @@
 # 01 — SPA 设置页（自定义正则规则 + judge prompt + 全量配置）
 
 Type: task
-Status: ready-for-agent
+Status: resolved
+
+## Answer
+
+已交付：options 升级为独立 SPA 设置页（`options_ui.open_in_tab: true`，SW `action.onClicked` → `openOptionsPage`，去掉 default_popup）；新增自定义正则规则 CRUD（无效正则保存前校验，`engine.score` 合并扣分并进理由面板）、judge prompt 编辑（textarea + 恢复默认，二审改用 `settings.judgePrompt`）、hideAiBody 开关。浏览器实测：规则添加/校验/生效、提示词落库、设置页全字段渲染均通过。
 Priority: P0
 
 将配置从 popup 体验迁移为**独立静态 SPA 设置页**（`chrome.runtime.openOptionsPage()` 全页打开，`open_in_tab: true`），并新增两类深度配置：

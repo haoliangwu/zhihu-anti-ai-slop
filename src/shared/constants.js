@@ -30,6 +30,11 @@ Object.assign(globalThis.ZhihuDetector, {
     minChars: 300,          // 判定字数下限：正文少于该字数直接跳过判定（0 关闭）
     windowMode: 'full',     // 'full' | 'head'（只看开头一两段）
     cloudPerPageLimit: 20,  // 每页二审调用上限
+    hideAiBody: true,       // P1：AI 判定直接隐藏正文（0 关闭）
+    /** 用户自定义 AI 创作痕迹正则规则：[{id, name, pattern, weight, cap}] */
+    customTraces: [],
+    /** 二审 system 提示词（可编辑，默认 = CLOUD_SYSTEM_PROMPT） */
+    judgePrompt: '',
   },
 
   /** 消息类型 */

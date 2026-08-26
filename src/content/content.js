@@ -128,8 +128,8 @@
         return;
       }
 
-      // 3) 规则初审
-      const rule = ZD.engine.score(text);
+      // 3) 规则初审（含用户自定义正则规则）
+      const rule = ZD.engine.score(text, state.settings.customTraces || []);
       let result = {
         source: 'rule',
         score: rule.score,
@@ -318,6 +318,26 @@
     }
 
     badge.appendChild(panel);
+
+    // P1：AI 判定 → 隐藏正文 + 原因与证据默认可见
+    const bodyEl = card.querySelector(ZD.extract.BODY_SELECTOR);
+    const isAiLevel = lv.level === 'confirm-ai' || lv.level === 'suspect-ai';
+    if (bodyEl) {
+      // 每次重渲染重置正文可见性（SPA 重渲染后自动重新应用处置）
+      bodyEl.style.display = isAiLevel && state.settings.hideAiBody ? 'none' : '';
+    }
+    if (isAiLevel) {
+      panel.hidden = false; // 直接渲染原因与证据，无需点击
+      if (bodyEl && state.settings.hideAiBody) {
+        const expandBtn = document.createElement('button');
+        expandBtn.type = 'button';
+        expandBtn.dataset.zysExpand = '1';
+        expandBtn.textContent = '展开原文';
+        expandBtn.className = 'zys-expand-btn';
+        panel.appendChild(expandBtn);
+      }
+    }
+
     badge.addEventListener('click', (e) => {
       if (e.target.closest('.zys-actions') || e.target.closest('.zys-panel')) return;
       panel.hidden = !panel.hidden;
@@ -360,6 +380,21 @@
 
   // 事件委托：按钮
   document.addEventListener('click', async (e) => {
+    // P1：展开/收起原文
+    const expandBtn = e.target.closest('[data-zys-expand]');
+    if (expandBtn) {
+      e.stopPropagation();
+      const badge = expandBtn.closest('.zys-badge');
+      const card = badge ? badge.closest(ZD.extract.CARD_SELECTOR) : null;
+      const bodyEl = card ? card.querySelector(ZD.extract.BODY_SELECTOR) : null;
+      if (card && bodyEl) {
+        const hidden = bodyEl.style.display === 'none';
+        bodyEl.style.display = hidden ? '' : 'none';
+        expandBtn.textContent = hidden ? '收起原文' : '展开原文';
+      }
+      return;
+    }
+
     const btn = e.target.closest('[data-zys-action]');
     if (!btn) return;
     e.stopPropagation();
