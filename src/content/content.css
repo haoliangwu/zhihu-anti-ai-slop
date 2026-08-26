@@ -22,7 +22,7 @@
 }
 
 .zys-badge:hover {
-  filter: brightness(0.97);
+  border-color: currentColor;
 }
 
 .zys-badge:focus-visible {
@@ -46,13 +46,10 @@
 .zys-level-normal     { color: #0a8f4e; background: rgba(10, 143, 78, 0.08); border-color: rgba(10, 143, 78, 0.22); }
 .zys-level-skip       { color: #8590a6; background: rgba(133, 144, 166, 0.1);  border-color: rgba(133, 144, 166, 0.18); }
 
-/* 理由面板：白底 + 知乎灰边框 */
+/* 理由面板：流式展开（badge 下方的独立块，把正文推下去，不悬浮遮挡） */
 .zys-panel {
-  position: absolute;
-  z-index: 9999;
-  left: 8px;
-  top: calc(100% + 4px);
-  width: min(360px, calc(100vw - 24px));
+  width: 100%;
+  margin: 6px 0 2px;
   padding: 12px;
   border-radius: 8px;
   background: #fff;
@@ -62,9 +59,8 @@
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
   border: 1px solid #ebebeb;
   text-align: left;
+  box-sizing: border-box;
 }
-
-.zys-badge { position: relative; }
 
 .zys-panel-title {
   font-weight: 600;

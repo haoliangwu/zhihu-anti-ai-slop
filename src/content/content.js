@@ -207,9 +207,7 @@
     p.className = 'zys-empty';
     p.textContent = `回答本身不足 ${minChars} 字，跳过 AI 判定。`;
     panel.appendChild(p);
-    badge.appendChild(panel);
-    badge.addEventListener('click', (e) => {
-      if (e.target.closest('.zys-panel')) return;
+    badge.addEventListener('click', () => {
       panel.hidden = !panel.hidden;
     });
     badge.addEventListener('keydown', (e) => {
@@ -219,9 +217,15 @@
       }
     });
 
+    // 流式插入：badge 在上、panel 在下、正文在下方被推开（不悬浮遮挡）
     const anchor = card.querySelector(ZD.extract.BODY_SELECTOR);
-    if (anchor) anchor.insertAdjacentElement('beforebegin', badge);
-    else card.prepend(badge);
+    if (anchor) {
+      anchor.insertAdjacentElement('beforebegin', badge);
+      anchor.insertAdjacentElement('beforebegin', panel);
+    } else {
+      card.prepend(badge);
+      card.prepend(panel);
+    }
   }
 
   function levelOfResult(result) {
@@ -234,8 +238,8 @@
   }
 
   function renderBadge(card, result) {
-    // 移除旧角标
-    card.querySelectorAll('.zys-badge').forEach((el) => el.remove());
+    // 移除旧角标与旧面板
+    card.querySelectorAll('.zys-badge, .zys-panel').forEach((el) => el.remove());
 
     const lv = levelOfResult(result);
     const badge = document.createElement('div');
@@ -317,8 +321,6 @@
       panel.appendChild(actions);
     }
 
-    badge.appendChild(panel);
-
     // P1：AI 判定 → 隐藏正文 + 原因与证据默认可见
     const bodyEl = card.querySelector(ZD.extract.BODY_SELECTOR);
     const isAiLevel = lv.level === 'confirm-ai' || lv.level === 'suspect-ai';
@@ -338,8 +340,7 @@
       }
     }
 
-    badge.addEventListener('click', (e) => {
-      if (e.target.closest('.zys-actions') || e.target.closest('.zys-panel')) return;
+    badge.addEventListener('click', () => {
       panel.hidden = !panel.hidden;
     });
     badge.addEventListener('keydown', (e) => {
@@ -349,9 +350,15 @@
       }
     });
 
+    // 流式插入：badge 在上、panel 在下、正文在下方被推开（不悬浮遮挡）
     const anchor = card.querySelector(ZD.extract.BODY_SELECTOR);
-    if (anchor) anchor.insertAdjacentElement('beforebegin', badge);
-    else card.prepend(badge);
+    if (anchor) {
+      anchor.insertAdjacentElement('beforebegin', badge);
+      anchor.insertAdjacentElement('beforebegin', panel);
+    } else {
+      card.prepend(badge);
+      card.prepend(panel);
+    }
   }
 
   // ---------- 覆盖操作 ----------
@@ -384,8 +391,7 @@
     const expandBtn = e.target.closest('[data-zys-expand]');
     if (expandBtn) {
       e.stopPropagation();
-      const badge = expandBtn.closest('.zys-badge');
-      const card = badge ? badge.closest(ZD.extract.CARD_SELECTOR) : null;
+      const card = expandBtn.closest(ZD.extract.CARD_SELECTOR);
       const bodyEl = card ? card.querySelector(ZD.extract.BODY_SELECTOR) : null;
       if (card && bodyEl) {
         const hidden = bodyEl.style.display === 'none';
@@ -398,11 +404,11 @@
     const btn = e.target.closest('[data-zys-action]');
     if (!btn) return;
     e.stopPropagation();
-    const badge = btn.closest('.zys-badge');
-    if (!badge) return;
-    const card = badge.closest(ZD.extract.CARD_SELECTOR);
-    const answerId = badge.dataset.zysAid;
-    if (!card || !answerId) return;
+    const card = btn.closest(ZD.extract.CARD_SELECTOR);
+    if (!card) return;
+    const badge = card.querySelector('.zys-badge');
+    const answerId = badge ? badge.dataset.zysAid : '';
+    if (!answerId) return;
     const action = btn.dataset.zysAction;
     if (action === 'human') await applyOverride(card, answerId, 'human');
     else if (action === 'ai') await applyOverride(card, answerId, 'ai');
