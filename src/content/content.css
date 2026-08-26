@@ -77,14 +77,25 @@
   margin-bottom: 6px;
 }
 
+/* 一审命中痕迹：水平标签排列（flex-wrap 自动换行，右侧不留白） */
 .zys-hits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
   margin: 0 0 6px;
-  padding-left: 18px;
+  padding: 0;
+  list-style: none;
 }
 
 .zys-hits li {
-  color: #4b5158;
-  margin: 2px 0;
+  padding: 1px 8px;
+  background: rgba(230, 67, 64, 0.05);
+  border: 1px solid rgba(230, 67, 64, 0.18);
+  border-radius: 4px;
+  color: #e64340;
+  font-size: 12px;
+  line-height: 20px;
+  white-space: nowrap;
 }
 
 .zys-empty {
