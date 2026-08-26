@@ -142,10 +142,21 @@ button.primary:hover { background: #0f55e8; }
 .status.ok { color: #0a8f4e; }
 .status.err { color: #d93026; }
 
-/* SPA 页面头部 */
-.page-head { margin-bottom: 14px; }
-.page-head h1 { margin-bottom: 4px; }
-.page-head .hint { margin: 0; }
+/* SPA 页面头部：logo 左侧 + 标题文字 */
+.page-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.page-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  flex-shrink: 0;
+}
+.page-head-text h1 { margin: 0 0 4px; }
+.page-head-text .hint { margin: 0; }
 
 /* 文本域 */
 .field-block { margin-top: 12px; }
