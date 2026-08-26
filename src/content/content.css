@@ -1,24 +1,32 @@
-/* 知乎照妖镜 — 角标样式（zys- 前缀，避免与页面样式冲突） */
+/* 知乎照妖镜 — 角标样式（zys- 前缀，避免与页面样式冲突）
+ * 配色对齐知乎白蓝灰主题：品牌蓝 #1772F6、边框 #ebebeb、浅底 #f7f8fa；
+ * 角标采用知乎话题标签（.Tag）风格——浅色透明底 + 等级色文字 + 小圆角。
+ */
 
+/* 角标：知乎 Tag 风浅色标签（等级色 8-10% 透明底 + 等级色文字 + 4px 圆角） */
 .zys-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   margin: 6px 0;
-  padding: 3px 10px;
-  border-radius: 999px;
+  padding: 1px 10px;
+  border-radius: 4px;
+  border: 1px solid transparent;
   font-size: 12px;
-  line-height: 1.4;
+  line-height: 20px;
   cursor: pointer;
   user-select: none;
-  color: #fff;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
   max-width: 100%;
   box-sizing: border-box;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.zys-badge:hover {
+  filter: brightness(0.97);
 }
 
 .zys-badge:focus-visible {
-  outline: 2px solid rgba(0, 0, 0, 0.4);
+  outline: 2px solid rgba(23, 114, 246, 0.4);
   outline-offset: 1px;
 }
 
@@ -28,30 +36,31 @@
 }
 
 .zys-badge .zys-meta {
-  opacity: 0.85;
+  opacity: 0.75;
   font-size: 11px;
 }
 
-.zys-level-confirm-ai { background: #d93026; }
-.zys-level-suspect-ai { background: #e8800c; }
-.zys-level-normal     { background: #0a8f4e; }
-.zys-level-skip       { background: #9aa0a6; }
+/* 等级配色（知乎蓝灰系调和后的红/橙/绿/灰） */
+.zys-level-confirm-ai { color: #e64340; background: rgba(230, 67, 64, 0.08); border-color: rgba(230, 67, 64, 0.22); }
+.zys-level-suspect-ai { color: #e8890c; background: rgba(232, 137, 12, 0.08); border-color: rgba(232, 137, 12, 0.25); }
+.zys-level-normal     { color: #0a8f4e; background: rgba(10, 143, 78, 0.08); border-color: rgba(10, 143, 78, 0.22); }
+.zys-level-skip       { color: #8590a6; background: rgba(133, 144, 166, 0.1);  border-color: rgba(133, 144, 166, 0.18); }
 
-/* 理由面板 */
+/* 理由面板：白底 + 知乎灰边框 */
 .zys-panel {
   position: absolute;
   z-index: 9999;
   left: 8px;
   top: calc(100% + 4px);
   width: min(360px, calc(100vw - 24px));
-  padding: 10px 12px;
+  padding: 12px;
   border-radius: 8px;
   background: #fff;
-  color: #1a1a1a;
-  font-size: 12px;
+  color: #1f2329;
+  font-size: 13px;
   line-height: 1.6;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
-  border: 1px solid #e5e5e5;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  border: 1px solid #ebebeb;
   text-align: left;
 }
 
@@ -67,52 +76,53 @@
   padding-left: 18px;
 }
 
-.zys-empty {
-  margin: 0 0 6px;
-  color: #666;
+.zys-hits li {
+  color: #4b5158;
+  margin: 2px 0;
 }
 
+.zys-empty {
+  margin: 0 0 6px;
+  color: #8590a6;
+}
+
+/* 二审证据块：知乎蓝替代原紫色 */
 .zys-cloud {
-  margin: 6px 0;
-  padding: 6px 8px;
-  border-left: 3px solid #8c6df0;
-  background: #f7f5ff;
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-left: 3px solid #1772f6;
+  background: rgba(23, 114, 246, 0.05);
   border-radius: 4px;
   color: #444;
 }
 
+/* 面板操作按钮：对齐知乎 Button outline（蓝字 #1772F6 + 蓝边框 + 胶囊） */
 .zys-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
-.zys-actions button {
-  padding: 3px 10px;
-  border: 1px solid #d0d0d0;
-  border-radius: 6px;
-  background: #fafafa;
-  color: #333;
-  font-size: 12px;
+.zys-actions button,
+.zys-expand-btn {
+  height: 30px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid #1772f6;
+  background: transparent;
+  color: #1772f6;
+  font-size: 13px;
   cursor: pointer;
+  transition: background-color 0.15s ease;
 }
 
-.zys-actions button:hover {
-  background: #f0f0f0;
+.zys-actions button:hover,
+.zys-expand-btn:hover {
+  background: rgba(23, 114, 246, 0.06);
 }
 
 /* P1：展开原文按钮 */
 .zys-expand-btn {
   margin-top: 8px;
-  padding: 3px 10px;
-  border: 1px solid #d0d0d0;
-  border-radius: 6px;
-  background: #fafafa;
-  color: #333;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.zys-expand-btn:hover {
-  background: #f0f0f0;
 }
