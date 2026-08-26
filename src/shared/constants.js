@@ -24,7 +24,7 @@ Object.assign(globalThis.ZhihuDetector, {
     fuzzyHigh: 80,          // 二审模糊带上界
     apiBaseUrl: 'https://api.deepseek.com/v1',
     apiKey: '',
-    apiModel: 'deepseek-chat',
+    apiModel: 'deepseek-v4-flash',
     cloudEnabled: true,
     maxChars: 2000,         // 输入窗口字数上限
     windowMode: 'full',     // 'full' | 'head'（只看开头一两段）

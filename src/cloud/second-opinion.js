@@ -13,16 +13,17 @@ ZD.cloud = {
   inFlight: 0,
 
   /**
-   * 二审入口：缓存 → 预算/并发 → 调用 API → 写缓存。
+   * 二审入口：缓存（按正文 MD5 哈希，内容更新自动失效）→ 预算/并发 → 调用 API → 写缓存。
    * @returns {Promise<{score:number, aiSignals:string[], humanSignals:string[], cached?:boolean}|null>}
    */
-  async secondOpinion(answerId, text, tabId, settings) {
+  async secondOpinion(text, tabId, settings) {
     if (!settings.cloudEnabled || !settings.apiKey) return null;
-    if (!answerId || !text) return null;
+    if (!text) return null;
 
-    // 1) 缓存命中（按回答 ID）
+    // 1) 缓存命中（键 = 正文内容哈希：作者编辑回答后文本变化 → 哈希变化 → 自动重判）
+    const contentHash = ZD.md5(text);
     const cache = await ZD.storage.getCache();
-    const cached = cache[answerId];
+    const cached = cache[contentHash];
     if (cached && typeof cached.score === 'number') {
       return { score: cached.score, aiSignals: cached.aiSignals || [], humanSignals: cached.humanSignals || [], cached: true };
     }
@@ -40,7 +41,7 @@ ZD.cloud = {
       await ZD.storage.setBudget(tabId, { used: budget.used + 1, ts: Date.now() });
       const result = await callApi(text, settings);
       if (!result) return null;
-      await ZD.storage.setCacheEntry(answerId, { ...result, ts: Date.now() });
+      await ZD.storage.setCacheEntry(contentHash, { ...result, ts: Date.now() });
       return result;
     } finally {
       ZD.cloud.inFlight--;

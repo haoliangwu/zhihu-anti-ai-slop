@@ -13,7 +13,7 @@
 
 - `zhihu.com/question/*` 页面（含滚动加载的回答卡片）
 - 规则引擎初审：命中 **AI 创作痕迹** 即扣分，输出规则分 + 命中清单
-- 云端二审：规则分落入模糊带（20–80，可配置）时调用 OpenAI 兼容接口（默认 DeepSeek），按回答 ID 缓存结果
+- 云端二审：规则分落入模糊带（20–80，可配置）时调用 OpenAI 兼容接口（默认 DeepSeek），按正文内容哈希缓存结果
 - 角标标记 + 理由面板（命中清单 / 二审依据）+ 用户覆盖（`chrome.storage.local`，按回答 ID 键）
 - 选项页：阈值 / 模糊带 / API 配置（base URL、API key、模型名）/ 输入窗口 / 每页二审上限 / 覆盖管理
 - 触发：页面加载分析已渲染回答；滚动（`MutationObserver`）分析新回答；选项页提供"重新分析当前页"
@@ -61,7 +61,7 @@
 ## 6. 云端二审
 
 - 触发：`fuzzyLow ≤ 规则分 ≤ fuzzyHigh`（默认 20–80）且选项页已配置 API key
-- 接口：OpenAI 兼容 `POST {baseUrl}/chat/completions`，`response_format: {"type":"json_object"}`；默认 `https://api.deepseek.com/v1`，模型默认 `deepseek-chat`
+- 接口：OpenAI 兼容 `POST {baseUrl}/chat/completions`，`response_format: {"type":"json_object"}`；默认 `https://api.deepseek.com/v1`，模型默认 `deepseek-v4-flash`
 - 协议（固定输出 JSON）：
   ```json
   {"score": 0-100, "verdict": "human"|"mixed"|"ai", "ai_signals": ["..."], "human_signals": ["..."]}
@@ -70,7 +70,7 @@
 - 提示词要点（来自调研）：默认假设人工、证据优先、先证据后分数；提示文学性/古风勿误判；个人经历/口语/即兴感为人工强信号
 - 限流：每页（按 tab）≤20 次（可配置）、并发 ≤2、单次超时 30s
 - 降级：未配置 key / 网络失败 / 解析失败 / 超限 → 返回空，内容脚本回落到规则分
-- 缓存：`chrome.storage.local`，键=回答 ID，上限 500 条（LRU 淘汰）
+- 缓存：`chrome.storage.local`，**键=正文 MD5 哈希**（回答被编辑后文本变化 → 哈希变化 → 自动重判），上限 500 条（LRU 淘汰）
 
 ## 7. 覆盖
 
@@ -94,7 +94,7 @@
 | `fuzzyLow` / `fuzzyHigh` | 20 / 80 | 二审模糊带 |
 | `apiBaseUrl` | `https://api.deepseek.com/v1` | OpenAI 兼容地址 |
 | `apiKey` | 空 | 掩码显示，本地存储 |
-| `apiModel` | `deepseek-chat` | 模型名 |
+| `apiModel` | `deepseek-v4-flash` | 模型名 |
 | `cloudEnabled` | true | 二审开关 |
 | `maxChars` | 2000 | 输入窗口字数上限 |
 | `windowMode` | `full` | full / head |

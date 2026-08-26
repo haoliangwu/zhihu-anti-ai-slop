@@ -7,6 +7,7 @@
 
 importScripts(
   '/src/shared/constants.js',
+  '/src/shared/hash.js',
   '/src/shared/storage.js',
   '/src/cloud/second-opinion.js'
 );
@@ -27,7 +28,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     try {
       const tabId = (sender.tab && sender.tab.id) || 0;
       const settings = await ZD.storage.getSettings();
-      const result = await ZD.cloud.secondOpinion(message.answerId, message.text, tabId, settings);
+      const result = await ZD.cloud.secondOpinion(message.text, tabId, settings);
       if (!result) {
         sendResponse({ ok: false });
         return;
