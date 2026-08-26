@@ -1,0 +1,101 @@
+/* 知乎照妖镜 — 角标样式（zys- 前缀，避免与页面样式冲突） */
+
+.zys-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 0;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1.4;
+  cursor: pointer;
+  user-select: none;
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.zys-badge:focus-visible {
+  outline: 2px solid rgba(0, 0, 0, 0.4);
+  outline-offset: 1px;
+}
+
+.zys-badge .zys-score {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.zys-badge .zys-meta {
+  opacity: 0.85;
+  font-size: 11px;
+}
+
+.zys-level-confirm-ai { background: #d93026; }
+.zys-level-suspect-ai { background: #e8800c; }
+.zys-level-normal     { background: #0a8f4e; }
+
+/* 理由面板 */
+.zys-panel {
+  position: absolute;
+  z-index: 9999;
+  left: 8px;
+  top: calc(100% + 4px);
+  width: min(360px, calc(100vw - 24px));
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff;
+  color: #1a1a1a;
+  font-size: 12px;
+  line-height: 1.6;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  border: 1px solid #e5e5e5;
+  text-align: left;
+}
+
+.zys-badge { position: relative; }
+
+.zys-panel-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.zys-hits {
+  margin: 0 0 6px;
+  padding-left: 18px;
+}
+
+.zys-empty {
+  margin: 0 0 6px;
+  color: #666;
+}
+
+.zys-cloud {
+  margin: 6px 0;
+  padding: 6px 8px;
+  border-left: 3px solid #8c6df0;
+  background: #f7f5ff;
+  border-radius: 4px;
+  color: #444;
+}
+
+.zys-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.zys-actions button {
+  padding: 3px 10px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  background: #fafafa;
+  color: #333;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.zys-actions button:hover {
+  background: #f0f0f0;
+}

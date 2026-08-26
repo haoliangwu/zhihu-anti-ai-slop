@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>知乎照妖镜 — 设置</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <main class="wrap">
+    <h1>知乎照妖镜 · 设置</h1>
+
+    <section class="card">
+      <h2>判定阈值</h2>
+      <p class="hint">人类置信度 0–100（100 = 几乎确定人工）。分数越低越可疑。</p>
+      <label class="row">
+        <span>确定 AI 阈值（分数 ≤ 此值标红）</span>
+        <input type="number" id="thresholdConfirm" min="0" max="100" step="1" />
+      </label>
+      <label class="row">
+        <span>疑似 AI 阈值（分数 ≤ 此值标橙）</span>
+        <input type="number" id="thresholdSuspect" min="0" max="100" step="1" />
+      </label>
+    </section>
+
+    <section class="card">
+      <h2>云端二审</h2>
+      <p class="hint">
+        规则初审分数落在模糊带内时，将回答正文发送至你配置的 LLM 服务（默认 DeepSeek）复核。
+        未配置 API Key 时仅使用本地规则。
+      </p>
+      <label class="row check">
+        <input type="checkbox" id="cloudEnabled" />
+        <span>启用云端二审</span>
+      </label>
+      <div class="grid2">
+        <label class="row">
+          <span>模糊带下限</span>
+          <input type="number" id="fuzzyLow" min="0" max="100" step="1" />
+        </label>
+        <label class="row">
+          <span>模糊带上限</span>
+          <input type="number" id="fuzzyHigh" min="0" max="100" step="1" />
+        </label>
+      </div>
+      <label class="row">
+        <span>API 地址（OpenAI 兼容）</span>
+        <input type="url" id="apiBaseUrl" placeholder="https://api.deepseek.com/v1" />
+      </label>
+      <label class="row">
+        <span>API Key</span>
+        <span class="key-wrap">
+          <input type="password" id="apiKey" autocomplete="off" placeholder="sk-…" />
+          <button type="button" id="toggleKey" class="mini">显示</button>
+        </span>
+      </label>
+      <p class="hint">Key 仅保存在本机浏览器（chrome.storage.local），不会随账号同步。</p>
+      <label class="row">
+        <span>模型名</span>
+        <input type="text" id="apiModel" placeholder="deepseek-chat" />
+      </label>
+      <label class="row">
+        <span>每页二审调用上限</span>
+        <input type="number" id="cloudPerPageLimit" min="1" max="200" step="1" />
+      </label>
+    </section>
+
+    <section class="card">
+      <h2>输入窗口</h2>
+      <label class="row">
+        <span>正文字数上限</span>
+        <input type="number" id="maxChars" min="200" max="10000" step="100" />
+      </label>
+      <label class="row">
+        <span>分析模式</span>
+        <select id="windowMode">
+          <option value="full">全文（截断至上限）</option>
+          <option value="head">只看开头一两段</option>
+        </select>
+      </label>
+    </section>
+
+    <section class="card">
+      <h2>覆盖管理</h2>
+      <p class="hint">你手动纠正过的回答判定（按回答 ID 持久化）。</p>
+      <ul id="overrideList" class="override-list"></ul>
+      <p id="overrideEmpty" class="hint">暂无覆盖记录。</p>
+    </section>
+
+    <div class="actions">
+      <button type="button" id="saveBtn" class="primary">保存设置</button>
+      <button type="button" id="reanalyzeBtn">重新分析当前页</button>
+      <span id="status" class="status" role="status"></span>
+    </div>
+  </main>
+  <script src="../shared/constants.js"></script>
+  <script src="../shared/storage.js"></script>
+  <script src="options.js"></script>
+</body>
+</html>

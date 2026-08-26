@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "知乎照妖镜",
+  "version": "0.1.0",
+  "description": "在知乎问题页为每条回答给出人类置信度判定，标记疑似 AI 创作，支持查看理由与手动覆盖。",
+  "minimum_chrome_version": "109",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://*.zhihu.com/*",
+    "https://api.deepseek.com/*"
+  ],
+  "background": {
+    "service_worker": "src/background/service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.zhihu.com/question/*"],
+      "js": [
+        "src/shared/constants.js",
+        "src/shared/storage.js",
+        "src/engine/traces.js",
+        "src/engine/rules.js",
+        "src/content/extract.js",
+        "src/content/content.js"
+      ],
+      "css": ["src/content/content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "知乎照妖镜",
+    "default_popup": "src/options/options.html"
+  },
+  "options_ui": {
+    "page": "src/options/options.html",
+    "open_in_tab": false
+  },
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  }
+}

@@ -1,0 +1,77 @@
+/**
+ * 知乎照妖镜 — 存储助手
+ * 依赖：constants.js（先加载）。
+ * 提供：设置读写、覆盖读写、二审缓存读写。
+ */
+'use strict';
+
+const ZD = globalThis.ZhihuDetector;
+const { KEYS, DEFAULTS } = ZD;
+
+ZD.storage = {
+  /** 读取设置，未保存项取默认值 */
+  async getSettings() {
+    const raw = await chrome.storage.local.get(KEYS.SETTINGS);
+    const saved = raw[KEYS.SETTINGS] || {};
+    return { ...DEFAULTS, ...saved };
+  },
+
+  /** 保存设置（完整替换） */
+  async saveSettings(settings) {
+    await chrome.storage.local.set({ [KEYS.SETTINGS]: settings });
+  },
+
+  /** 读取全部覆盖 { answerId: {verdict,score,note,ts} } */
+  async getOverrides() {
+    const raw = await chrome.storage.local.get(KEYS.OVERRIDES);
+    return raw[KEYS.OVERRIDES] || {};
+  },
+
+  /** 写入单条覆盖 */
+  async setOverride(answerId, override) {
+    const overrides = await ZD.storage.getOverrides();
+    overrides[answerId] = override;
+    await chrome.storage.local.set({ [KEYS.OVERRIDES]: overrides });
+  },
+
+  /** 清除单条覆盖 */
+  async removeOverride(answerId) {
+    const overrides = await ZD.storage.getOverrides();
+    if (!(answerId in overrides)) return;
+    delete overrides[answerId];
+    await chrome.storage.local.set({ [KEYS.OVERRIDES]: overrides });
+  },
+
+  /** 读取二审缓存 { answerId: {score, aiSignals, humanSignals, ts} } */
+  async getCache() {
+    const raw = await chrome.storage.local.get(KEYS.CACHE);
+    return raw[KEYS.CACHE] || {};
+  },
+
+  /** 写入二审缓存，超限按 ts 淘汰最旧条目（LRU 简化版） */
+  async setCacheEntry(answerId, entry) {
+    const cache = await ZD.storage.getCache();
+    cache[answerId] = entry;
+    const ids = Object.keys(cache);
+    if (ids.length > ZD.CACHE_LIMIT) {
+      const sorted = ids.sort((a, b) => (cache[a].ts || 0) - (cache[b].ts || 0));
+      for (const id of sorted.slice(0, ids.length - ZD.CACHE_LIMIT)) delete cache[id];
+    }
+    await chrome.storage.local.set({ [KEYS.CACHE]: cache });
+  },
+
+  /** 读取某 tab 的本页二审预算（chrome.storage.session，SW 重启后仍有效） */
+  async getBudget(tabId) {
+    const raw = await chrome.storage.session.get(KEYS.BUDGET);
+    const budgets = raw[KEYS.BUDGET] || {};
+    return budgets[String(tabId)] || { used: 0, ts: 0 };
+  },
+
+  /** 写回某 tab 的预算 */
+  async setBudget(tabId, budget) {
+    const raw = await chrome.storage.session.get(KEYS.BUDGET);
+    const budgets = raw[KEYS.BUDGET] || {};
+    budgets[String(tabId)] = budget;
+    await chrome.storage.session.set({ [KEYS.BUDGET]: budgets });
+  },
+};

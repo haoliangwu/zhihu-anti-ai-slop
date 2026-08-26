@@ -1,0 +1,143 @@
+/* 知乎照妖镜 — 选项页样式 */
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+  background: #f5f6f8;
+  color: #1f2329;
+  font-size: 14px;
+}
+
+.wrap {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 20px 16px 40px;
+}
+
+h1 {
+  font-size: 20px;
+  margin: 0 0 16px;
+}
+
+h2 {
+  font-size: 15px;
+  margin: 0 0 10px;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #e6e8eb;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+
+.hint {
+  color: #7a818b;
+  font-size: 12px;
+  margin: 4px 0 10px;
+  line-height: 1.5;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 8px 0;
+}
+
+.row.check { justify-content: flex-start; gap: 8px; }
+
+.row input[type="number"],
+.row input[type="text"],
+.row input[type="url"],
+.row input[type="password"],
+.row select {
+  width: 220px;
+  padding: 6px 8px;
+  border: 1px solid #d0d4da;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 16px;
+}
+
+.key-wrap {
+  display: flex;
+  gap: 6px;
+  width: 220px;
+}
+
+.key-wrap input { flex: 1; width: auto; }
+
+.mini {
+  padding: 5px 10px;
+  border: 1px solid #d0d4da;
+  border-radius: 6px;
+  background: #fafbfc;
+  cursor: pointer;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.mini:hover { background: #f0f2f4; }
+
+.override-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.override-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid #f0f2f4;
+}
+
+.ov-info {
+  font-size: 12px;
+  color: #4b5158;
+  word-break: break-all;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+button.primary {
+  padding: 8px 18px;
+  border: none;
+  border-radius: 8px;
+  background: #1664ff;
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+button.primary:hover { background: #0f55e8; }
+
+.actions button:not(.primary) {
+  padding: 8px 14px;
+  border: 1px solid #d0d4da;
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.status { font-size: 13px; margin-left: 4px; }
+.status.ok { color: #0a8f4e; }
+.status.err { color: #d93026; }
