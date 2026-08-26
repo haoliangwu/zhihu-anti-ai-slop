@@ -227,3 +227,15 @@ button.primary.small {
   color: #4b5158;
   padding: 2px 0;
 }
+
+/* 二审权重滑块 */
+.weight-val {
+  min-width: 44px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #4b5158;
+}
+.row input[type="range"] {
+  flex: 1;
+  width: auto;
+}

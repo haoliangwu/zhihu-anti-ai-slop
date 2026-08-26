@@ -13,7 +13,8 @@ ZD.cloud = {
   inFlight: 0,
 
   /**
-   * 二审入口：缓存（键 = 正文归一化哈希 + 一审结果摘要）→ 预算/并发 → 调用 API → 写缓存。
+   * 二审入口：缓存（键 = 正文归一化哈希 + 一审结果摘要 + 融合权重）→ 预算/并发 → 调用 API → 写缓存。
+   * 返回分数为一审/二审加权融合结果（LLM 打分波动大，融合后显著降噪）。
    * @param {string} text 正文
    * @param {number} tabId
    * @param {object} settings
@@ -24,9 +25,13 @@ ZD.cloud = {
     if (!settings.cloudEnabled || !settings.apiKey) return null;
     if (!text) return null;
 
-    // 1) 缓存命中（键 = 正文归一化哈希 + 一审结果摘要：
-    //    正文或一审判定变化 → 键变化 → 自动重判；二审必须看到一审结果）
-    const contentHash = ZD.md5(text.replace(/\s+/g, ' ').trim() + '|first:' + firstPassSummary(ruleContext));
+    // 1) 缓存命中（键 = 正文归一化哈希 + 一审结果摘要 + 融合权重：
+    //    正文/一审判定/权重变化 → 键变化 → 自动重判）
+    const contentHash = ZD.md5(
+      text.replace(/\s+/g, ' ').trim() +
+      '|first:' + firstPassSummary(ruleContext) +
+      '|w:' + (settings.cloudScoreWeight ?? 0.6)
+    );
     const cache = await ZD.storage.getCache();
     const cached = cache[contentHash];
     if (cached && typeof cached.score === 'number') {
@@ -46,13 +51,28 @@ ZD.cloud = {
       await ZD.storage.setBudget(tabId, { used: budget.used + 1, ts: Date.now() });
       const result = await callApi(text, settings, ruleContext);
       if (!result) return null;
-      await ZD.storage.setCacheEntry(contentHash, { ...result, ts: Date.now() });
-      return result;
+      // 加权融合：final = w·cloud + (1−w)·rule（无一审时直接用 LLM 分）
+      const fused = fuseScore(ruleContext ? ruleContext.ruleScore : null, result.score, settings);
+      const entry = { ...result, score: fused, ts: Date.now() };
+      await ZD.storage.setCacheEntry(contentHash, entry);
+      return { ...result, score: fused };
     } finally {
       ZD.cloud.inFlight--;
     }
   },
 };
+
+/**
+ * 一审/二审分数加权融合（线性加权）。
+ * @param {number|null} ruleScore 一审规则分（无则原样返回二审分）
+ * @param {number} cloudScore 二审 LLM 分
+ * @param {object} settings
+ */
+function fuseScore(ruleScore, cloudScore, settings) {
+  if (typeof ruleScore !== 'number') return cloudScore;
+  const w = Math.min(1, Math.max(0, settings.cloudScoreWeight ?? 0.6));
+  return Math.max(0, Math.min(100, Math.round(w * cloudScore + (1 - w) * ruleScore)));
+}
 
 /** 一审结果摘要（用于缓存键：规则分 + 命中规则 id，排序保证稳定） */
 function firstPassSummary(ruleContext) {

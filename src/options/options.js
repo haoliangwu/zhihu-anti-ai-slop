@@ -37,6 +37,10 @@
     $('hideAiBody').checked = settings.hideAiBody !== false;
     // 提示词总显示完整内容：未设置（''）时展示内置默认，用户可直接基于它修改
     $('judgePrompt').value = settings.judgePrompt || ZD.CLOUD_SYSTEM_PROMPT;
+    // 二审权重滑块（0-100 显示，存储 0-1）
+    const w = Math.round((settings.cloudScoreWeight ?? 0.6) * 100);
+    $('cloudScoreWeight').value = w;
+    $('cloudScoreWeightVal').textContent = w + '%';
     renderTraces(settings.customTraces || []);
     renderBuiltinTraces();
   }
@@ -52,6 +56,7 @@
     s.apiKey = $('apiKey').value.trim();
     s.windowMode = $('windowMode').value;
     s.hideAiBody = $('hideAiBody').checked;
+    s.cloudScoreWeight = Number($('cloudScoreWeight').value) / 100;
     // 覆盖形态：与内置默认完全一致时存 ''（等同使用内置），否则存全文
     const prompt = $('judgePrompt').value.trim();
     s.judgePrompt = prompt === ZD.CLOUD_SYSTEM_PROMPT ? '' : prompt;
@@ -276,6 +281,9 @@
     setStatus('已恢复默认提示词（保存后生效）', true);
   });
   $('addTraceBtn').addEventListener('click', addTrace);
+  $('cloudScoreWeight').addEventListener('input', () => {
+    $('cloudScoreWeightVal').textContent = $('cloudScoreWeight').value + '%';
+  });
 
   // 存储变化：其他页面修改设置/覆盖时同步刷新
   chrome.storage.onChanged.addListener((changes, area) => {

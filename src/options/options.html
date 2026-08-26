@@ -66,6 +66,11 @@
         <span>每页二审调用上限</span>
         <input type="number" id="cloudPerPageLimit" min="1" max="200" step="1" />
       </label>
+      <label class="row">
+        <span>二审权重（最终分 = 二审×权重 + 一审×(1−权重)；LLM 打分波动大，建议 50–70%）</span>
+        <input type="range" id="cloudScoreWeight" min="0" max="100" step="5" />
+        <span id="cloudScoreWeightVal" class="weight-val">60%</span>
+      </label>
       <div class="field-block">
         <label for="judgePrompt">二审提示词（system）</label>
         <p class="hint">保存时该提示词将<strong>整体覆盖</strong>默认提示词（正文作为单独的 user 消息发送）。支持保留字 <code>{{ai_slot_ctx}}</code>：调用时替换为一审（规则引擎）的规则分与命中痕迹；模板不含保留字时自动追加到末尾。改回默认内容即等同使用内置。</p>
