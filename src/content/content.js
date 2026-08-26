@@ -558,8 +558,15 @@
   // ---------- 预加载：提前渲染下一批回答，减少滚动到时的判定延迟 ----------
   // 知乎懒加载阈值极贴近底部（实测距底部 1.5 屏不触发，滚到底才加载 10 个/批），
   // 答案进入 viewport 时才刚渲染、分析才开始 → 用户滚到时还在"二审中"。
-  // 策略：用户空闲时周期性"到底部触发加载 → 恢复原位"，屏幕外提前分析；
+  // 策略：仅在问题页/答案详情页（URL /question/ 前缀）且用户空闲时，
+  // 周期性"到底部触发加载 → 恢复原位"，屏幕外提前分析；
   // 用户正在滚动或仍有未分析卡片时跳过，加载完（无新增）后退避重试。
+  // SPA 导航到其他页面（如首页）时暂停，回到问题页自动恢复。
+
+  /** 是否问题页/答案详情页（预加载只在此类页面运行） */
+  function isQuestionPage() {
+    return /^https:\/\/[^/]*\.?zhihu\.com\/question\//.test(location.href);
+  }
 
   const preload = {
     /** 距上次预加载的间隔（ms）：加载成功保持节奏，无更多后退避 */
@@ -582,7 +589,15 @@
         },
         { passive: true }
       );
-      this.schedule();
+      // SPA 路由变化监视：离开问题页（如回首页）暂停，回到问题页恢复
+      let lastHref = location.href;
+      setInterval(() => {
+        if (location.href === lastHref) return;
+        lastHref = location.href;
+        if (isQuestionPage()) this.schedule();
+        else this.stop();
+      }, 1000);
+      if (isQuestionPage()) this.schedule();
     },
 
     schedule() {
@@ -590,7 +605,13 @@
       this.timer = setTimeout(() => this.tick(), this.interval);
     },
 
+    stop() {
+      clearTimeout(this.timer);
+    },
+
     async tick() {
+      // 非问题页（SPA 导航离开）：不预加载（URL 监视恢复时重新调度）
+      if (!isQuestionPage()) return;
       // 用户正在滚动：不打扰，顺延
       if (this.scrolling) {
         this.schedule();
@@ -605,7 +626,10 @@
       const count = cards.length;
       const y = window.scrollY;
       window.scrollTo(0, document.body.scrollHeight); // 触发知乎加载更多
-      await sleep(60);
+      // 知乎懒加载监听 scroll 事件：程序化 scrollTo 本身不触发其加载逻辑，需补发
+      window.dispatchEvent(new Event('scroll'));
+      // 等待新卡片渲染：实测知乎加载一批约 400ms，留余量再检查
+      await sleep(500);
       const countAfter = ZD.extract.findAnswerCards(document).length;
       window.scrollTo(0, y); // 恢复原滚动位置（新卡片由 MutationObserver 捕获分析）
       this.interval = countAfter > count ? 4_000 : this.IDLE_BACKOFF;
