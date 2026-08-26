@@ -527,10 +527,28 @@
 
   function processAddedNodes(nodes) {
     const cards = [];
+    const seen = new Set();
     for (const node of nodes) {
       if (!(node instanceof Element)) continue;
+      // 正文区域变化（如首页"阅读全文"展开折叠预览 / 问题页折叠长文展开）：
+      // 该卡片已按摘要分析过 → 重置状态以便按全文重新分析
+      if (node.closest(ZD.extract.BODY_SELECTOR)) {
+        const card = node.closest(ZD.extract.CARD_SELECTOR);
+        if (card && state.analyzed.has(card)) {
+          state.analyzed.delete(card);
+          state.inFlight.delete(card);
+          if (!seen.has(card)) {
+            seen.add(card);
+            cards.push(card);
+          }
+          continue;
+        }
+      }
       for (const card of ZD.extract.findAnswerCards(node)) {
-        if (!state.analyzed.has(card)) cards.push(card);
+        if (!state.analyzed.has(card) && !seen.has(card)) {
+          seen.add(card);
+          cards.push(card);
+        }
       }
     }
     if (cards.length) analyzeCards(cards);

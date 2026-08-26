@@ -17,7 +17,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://*.zhihu.com/question/*"],
+      "matches": ["https://*.zhihu.com/question/*", "https://*.zhihu.com/"],
       "js": [
         "src/shared/constants.js",
         "src/shared/storage.js",
