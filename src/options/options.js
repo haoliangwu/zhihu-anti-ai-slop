@@ -35,8 +35,10 @@
     $('apiKey').value = settings.apiKey || '';
     $('windowMode').value = settings.windowMode || 'full';
     $('hideAiBody').checked = settings.hideAiBody !== false;
-    $('judgePrompt').value = settings.judgePrompt || '';
+    // 提示词总显示完整内容：未设置（''）时展示内置默认，用户可直接基于它修改
+    $('judgePrompt').value = settings.judgePrompt || ZD.CLOUD_SYSTEM_PROMPT;
     renderTraces(settings.customTraces || []);
+    renderBuiltinTraces();
   }
 
   function collectForm() {
@@ -50,7 +52,9 @@
     s.apiKey = $('apiKey').value.trim();
     s.windowMode = $('windowMode').value;
     s.hideAiBody = $('hideAiBody').checked;
-    s.judgePrompt = $('judgePrompt').value.trim();
+    // 覆盖形态：与内置默认完全一致时存 ''（等同使用内置），否则存全文
+    const prompt = $('judgePrompt').value.trim();
+    s.judgePrompt = prompt === ZD.CLOUD_SYSTEM_PROMPT ? '' : prompt;
     s.customTraces = collectTraces();
     return s;
   }
@@ -199,6 +203,21 @@
     $('tracePattern').value = '';
   }
 
+  // ---------- 内置规则展示 ----------
+
+  function renderBuiltinTraces() {
+    const list = $('builtinTraceList');
+    list.textContent = '';
+    for (const t of ZD.traces) {
+      const li = document.createElement('li');
+      const name = document.createElement('span');
+      name.className = 'ov-info';
+      name.textContent = `${t.name} — 每次扣 ${t.weight} 分（上限 ${t.cap} 次）`;
+      li.appendChild(name);
+      list.appendChild(li);
+    }
+  }
+
   // ---------- 覆盖管理 ----------
 
   async function renderOverrides() {
@@ -253,8 +272,8 @@
     $('toggleKey').textContent = show ? '隐藏' : '显示';
   });
   $('resetPrompt').addEventListener('click', () => {
-    $('judgePrompt').value = '';
-    setStatus('已恢复内置默认提示词（保存后生效）', true);
+    $('judgePrompt').value = ZD.CLOUD_SYSTEM_PROMPT;
+    setStatus('已恢复默认提示词（保存后生效）', true);
   });
   $('addTraceBtn').addEventListener('click', addTrace);
 

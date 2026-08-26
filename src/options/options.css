@@ -201,3 +201,29 @@ button.primary.small {
 }
 .trace-form .row input[type="number"],
 .trace-form .row input[type="text"] { width: 100%; }
+
+/* 内置规则折叠 */
+.builtin-traces {
+  margin: 10px 0;
+  border: 1px solid #e6e8eb;
+  border-radius: 8px;
+  padding: 8px 12px;
+  background: #fafbfc;
+}
+.builtin-traces summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: #4b5158;
+  user-select: none;
+}
+.builtin-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.builtin-list li {
+  font-size: 12px;
+  color: #4b5158;
+  padding: 2px 0;
+}
