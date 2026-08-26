@@ -76,6 +76,24 @@
     );
   }
 
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  /**
+   * 稳定化提取：SPA 渐进渲染时卡片内容会变化，连续两次采样一致才返回，
+   * 避免在部分渲染态取文本（这是缓存哈希不稳定的主因）。
+   * 最多等 4 轮（约 2s），仍不稳定则返回最后一次采样。
+   */
+  async function extractStableText(card) {
+    let prev = ZD.extract.extractText(card, state.settings);
+    for (let i = 0; i < 4; i++) {
+      await sleep(500);
+      const cur = ZD.extract.extractText(card, state.settings);
+      if (cur === prev) return cur;
+      prev = cur;
+    }
+    return prev;
+  }
+
   /**
    * 分析单张回答卡片，产出结果并渲染。
    * @returns {Promise<void>}
@@ -84,15 +102,8 @@
     if (state.inFlight.has(card)) return state.inFlight.get(card);
     const p = (async () => {
       const answerId = ZD.extract.getAnswerId(card);
-      const text = ZD.extract.extractText(card, state.settings);
-      // 字数下限：回答本身少于 minChars 字直接跳过判定（短文本判 AI 无意义，0 关闭）
-      const minChars = state.settings.minChars || 0;
-      if (!text || (minChars > 0 && ZD.extract.rawLength(card) < minChars)) {
-        state.analyzed.add(card);
-        return;
-      }
 
-      // 1) 覆盖优先
+      // 1) 覆盖优先（无需等待文本稳定，立即渲染）
       const override = answerId ? state.overrides[answerId] : null;
       if (override) {
         const result = {
@@ -108,7 +119,15 @@
         return;
       }
 
-      // 2) 规则初审
+      // 2) 文本稳定化 + 字数下限（短文本判 AI 无意义，0 关闭）
+      const text = await extractStableText(card);
+      const minChars = state.settings.minChars || 0;
+      if (!text || (minChars > 0 && ZD.extract.rawLength(card) < minChars)) {
+        state.analyzed.add(card);
+        return;
+      }
+
+      // 3) 规则初审
       const rule = ZD.engine.score(text);
       let result = {
         source: 'rule',
@@ -117,7 +136,7 @@
         answerId,
       };
 
-      // 3) 云端二审（模糊带 + 已配置；经内容侧队列限流，不丢弃）
+      // 4) 云端二审（模糊带 + 已配置；经内容侧队列限流，不丢弃）
       if (answerId && cloudEligible(rule.score, state.settings)) {
         const cloud = await cloudQueue.request(text);
         if (cloud) {

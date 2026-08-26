@@ -20,8 +20,9 @@ ZD.cloud = {
     if (!settings.cloudEnabled || !settings.apiKey) return null;
     if (!text) return null;
 
-    // 1) 缓存命中（键 = 正文内容哈希：作者编辑回答后文本变化 → 哈希变化 → 自动重判）
-    const contentHash = ZD.md5(text);
+    // 1) 缓存命中（键 = 正文归一化哈希：折叠空白消除 DOM 空白差异噪声；
+    //    作者编辑回答后文本变化 → 哈希变化 → 自动重判）
+    const contentHash = ZD.md5(text.replace(/\s+/g, ' ').trim());
     const cache = await ZD.storage.getCache();
     const cached = cache[contentHash];
     if (cached && typeof cached.score === 'number') {

@@ -51,32 +51,51 @@ ZD.extract = {
     return null;
   },
 
-  /**
-   * 回答本身字数（原始正文长度，未截断、不受 windowMode 影响）。
-   * 用于判定字数下限：短回答直接跳过，不渲染角标。
-   * @returns {number}
-   */
-  rawLength(card) {
-    const bodyEl = card.querySelector(ZD.extract.BODY_SELECTOR);
-    return bodyEl ? bodyEl.textContent.trim().length : 0;
-  },
+  /** 真实正文块元素：跳过内嵌卡片/图片占位(noscript)/元数据，只取正文 */
+  BODY_BLOCK_SELECTOR: 'p, li, blockquote, h1, h2, h3, h4, h5, h6, pre',
 
   /**
-   * 提取输入窗口文本：跳过标题区、图/引用开头的空段落，
-   * 按 maxChars 截断；windowMode='head' 时只看开头一两段。
-   * @returns {string}
+   * 提取正文段落（只走块级正文元素）。
+   * 知乎正文以 <p> 为主；NOSCRIPT 里的图片标记文本、内嵌卡片动态数字
+   * （如"50 赞同 · 1 评论"）都被排除，避免内容级哈希不稳定。
+   * @returns {string[]}
    */
-  extractText(card, settings) {
+  bodyParagraphs(card) {
     const bodyEl = card.querySelector(ZD.extract.BODY_SELECTOR);
-    if (!bodyEl) return '';
-    const paras = bodyEl.textContent
-      .split(/\n+/)
-      .map((s) => s.trim())
+    if (!bodyEl) return [];
+    let paras = Array.from(bodyEl.querySelectorAll(ZD.extract.BODY_BLOCK_SELECTOR))
+      .map((el) => el.textContent.trim())
       .filter(Boolean);
+    if (paras.length === 0) {
+      // 兜底：无块级正文时退回整段文本（按换行切分）
+      paras = bodyEl.textContent
+        .split(/\n+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
     // 跳过开头的图片占位/来源行
     while (paras.length && /^(\[图片\]|图片|图\d|via|来自|图片来源)/.test(paras[0])) paras.shift();
     // 跳过开头的引用段落（以引号起始的整段）
     while (paras.length > 1 && /^[「『“《]/.test(paras[0])) paras.shift();
+    return paras;
+  },
+
+  /**
+   * 回答本身字数（正文段落总长，未截断、不受 windowMode 影响）。
+   * 用于判定字数下限：短回答直接跳过，不渲染角标。
+   * @returns {number}
+   */
+  rawLength(card) {
+    return ZD.extract.bodyParagraphs(card).join('\n').length;
+  },
+
+  /**
+   * 提取输入窗口文本：只取真实正文块，跳过标题区、图/引用开头的空段落，
+   * 按 maxChars 截断；windowMode='head' 时只看开头一两段。
+   * @returns {string}
+   */
+  extractText(card, settings) {
+    const paras = ZD.extract.bodyParagraphs(card);
     if (paras.length === 0) return '';
 
     let body;
