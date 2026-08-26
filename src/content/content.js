@@ -197,7 +197,7 @@
    * 与"未命中"区分：跳过 = 太短不判；未命中 = 判了但没命中痕迹。
    */
   function renderSkippedBadge(card, minChars) {
-    card.querySelectorAll('.zys-badge').forEach((el) => el.remove());
+    card.querySelectorAll('.zys-badge, .zys-rejudging').forEach((el) => el.remove());
     const badge = document.createElement('div');
     badge.className = 'zys-badge zys-level-skip';
     badge.setAttribute('tabindex', '0');
@@ -252,7 +252,7 @@
 
   function renderBadge(card, result) {
     // 移除旧角标与旧面板
-    card.querySelectorAll('.zys-badge, .zys-panel').forEach((el) => el.remove());
+    card.querySelectorAll('.zys-badge, .zys-panel, .zys-rejudging').forEach((el) => el.remove());
 
     const lv = levelOfResult(result);
     const badge = document.createElement('div');
@@ -396,9 +396,31 @@
 
   // ---------- 覆盖操作 ----------
 
-  /** 手动重新判定：重置该回答的分析状态，强制二审绕过缓存重新调用 */
+  /**
+   * 手动重新判定：隐藏旧结果并显示加载动画，重置分析状态，
+   * 强制二审绕过缓存重新调用；完成后新角标淡入。
+   */
   async function rejudge(card, answerId) {
     if (!answerId) return;
+
+    // 1) 暂时隐藏旧结果
+    card.querySelectorAll('.zys-badge, .zys-panel, .zys-rejudging').forEach((el) => el.remove());
+
+    // 2) 显示"重新判定中"加载动画
+    const loading = document.createElement('div');
+    loading.className = 'zys-rejudging';
+    const spinner = document.createElement('span');
+    spinner.className = 'zys-spinner';
+    const label = document.createElement('span');
+    label.className = 'zys-rejudging-label';
+    label.textContent = '重新判定中…';
+    loading.appendChild(spinner);
+    loading.appendChild(label);
+    const anchor = card.querySelector(ZD.extract.BODY_SELECTOR);
+    if (anchor) anchor.insertAdjacentElement('beforebegin', loading);
+    else card.prepend(loading);
+
+    // 3) 重置状态并重跑（renderBadge 会清理 loading 元素）
     state.results.delete(answerId);
     state.analyzed.delete(card);
     state.inFlight.delete(card);
