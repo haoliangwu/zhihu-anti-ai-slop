@@ -119,11 +119,12 @@
         return;
       }
 
-      // 2) 文本稳定化 + 字数下限（短文本判 AI 无意义，0 关闭）
+      // 2) 文本稳定化 + 字数下限（短文本判 AI 无意义，0 关闭；以"跳过"角标标记）
       const text = await extractStableText(card);
       const minChars = state.settings.minChars || 0;
       if (!text || (minChars > 0 && ZD.extract.rawLength(card) < minChars)) {
         state.analyzed.add(card);
+        renderSkippedBadge(card, minChars);
         return;
       }
 
@@ -177,7 +178,51 @@
 
   // ---------- 角标渲染 ----------
 
-  const LEVEL_CLASS = { 'confirm-ai': 'zys-level-confirm-ai', 'suspect-ai': 'zys-level-suspect-ai', normal: 'zys-level-normal' };
+  const LEVEL_CLASS = { 'confirm-ai': 'zys-level-confirm-ai', 'suspect-ai': 'zys-level-suspect-ai', normal: 'zys-level-normal', skip: 'zys-level-skip' };
+
+  /**
+   * 渲染"跳过"角标：回答本身字数少于 minChars，不判定。
+   * 与"未命中"区分：跳过 = 太短不判；未命中 = 判了但没命中痕迹。
+   */
+  function renderSkippedBadge(card, minChars) {
+    card.querySelectorAll('.zys-badge').forEach((el) => el.remove());
+    const badge = document.createElement('div');
+    badge.className = 'zys-badge zys-level-skip';
+    badge.setAttribute('tabindex', '0');
+
+    const labelEl = document.createElement('span');
+    labelEl.className = 'zys-level';
+    labelEl.textContent = '跳过';
+    badge.appendChild(labelEl);
+
+    const metaEl = document.createElement('span');
+    metaEl.className = 'zys-meta';
+    metaEl.textContent = `少于 ${minChars} 字`;
+    badge.appendChild(metaEl);
+
+    const panel = document.createElement('div');
+    panel.className = 'zys-panel';
+    panel.hidden = true;
+    const p = document.createElement('p');
+    p.className = 'zys-empty';
+    p.textContent = `回答本身不足 ${minChars} 字，跳过 AI 判定。`;
+    panel.appendChild(p);
+    badge.appendChild(panel);
+    badge.addEventListener('click', (e) => {
+      if (e.target.closest('.zys-panel')) return;
+      panel.hidden = !panel.hidden;
+    });
+    badge.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        panel.hidden = !panel.hidden;
+      }
+    });
+
+    const anchor = card.querySelector(ZD.extract.BODY_SELECTOR);
+    if (anchor) anchor.insertAdjacentElement('beforebegin', badge);
+    else card.prepend(badge);
+  }
 
   function levelOfResult(result) {
     if (result.source === 'override') {

@@ -35,6 +35,7 @@
 .zys-level-confirm-ai { background: #d93026; }
 .zys-level-suspect-ai { background: #e8800c; }
 .zys-level-normal     { background: #0a8f4e; }
+.zys-level-skip       { background: #9aa0a6; }
 
 /* 理由面板 */
 .zys-panel {
