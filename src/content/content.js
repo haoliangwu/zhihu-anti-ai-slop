@@ -555,94 +555,6 @@
     observer.observe(document.body, { childList: true, subtree: true });
   }
 
-  // ---------- 预加载：提前渲染下一批回答，减少滚动到时的判定延迟 ----------
-  // 知乎懒加载阈值极贴近底部（实测距底部 1.5 屏不触发，滚到底才加载 10 个/批），
-  // 答案进入 viewport 时才刚渲染、分析才开始 → 用户滚到时还在"二审中"。
-  // 策略：仅在问题页/答案详情页（URL /question/ 前缀）且用户空闲时，
-  // 周期性"到底部触发加载 → 恢复原位"，屏幕外提前分析；
-  // 用户正在滚动或仍有未分析卡片时跳过，加载完（无新增）后退避重试。
-  // SPA 导航到其他页面（如首页）时暂停，回到问题页自动恢复。
-
-  /** 是否问题页/答案详情页（预加载只在此类页面运行） */
-  function isQuestionPage() {
-    return /^https:\/\/[^/]*\.?zhihu\.com\/question\//.test(location.href);
-  }
-
-  const preload = {
-    /** 距上次预加载的间隔（ms）：加载成功保持节奏，无更多后退避 */
-    interval: 8_000,
-    /** 无更多后的退避间隔（ms） */
-    IDLE_BACKOFF: 300_000,
-    /** 滚动到底的停留时长（ms）：实测知乎加载触发仅需 ~50ms 停留，
-     *  越短用户越无感（避免页面闪动） */
-    TRIGGER_HOLD_MS: 80,
-    timer: null,
-    scrolling: false,
-    _scrollEndTimer: null,
-
-    start() {
-      window.addEventListener(
-        'scroll',
-        () => {
-          this.scrolling = true;
-          clearTimeout(this._scrollEndTimer);
-          this._scrollEndTimer = setTimeout(() => {
-            this.scrolling = false;
-          }, 800);
-        },
-        { passive: true }
-      );
-      // SPA 路由变化监视：离开问题页（如回首页）暂停，回到问题页恢复
-      let lastHref = location.href;
-      setInterval(() => {
-        if (location.href === lastHref) return;
-        lastHref = location.href;
-        if (isQuestionPage()) this.schedule();
-        else this.stop();
-      }, 1000);
-      if (isQuestionPage()) this.schedule();
-    },
-
-    schedule() {
-      clearTimeout(this.timer);
-      this.timer = setTimeout(() => this.tick(), this.interval);
-    },
-
-    stop() {
-      clearTimeout(this.timer);
-    },
-
-    async tick() {
-      // 非问题页（SPA 导航离开）：不预加载（URL 监视恢复时重新调度）
-      if (!isQuestionPage()) return;
-      // 用户正在滚动：不打扰，顺延
-      if (this.scrolling) {
-        this.schedule();
-        return;
-      }
-      const cards = ZD.extract.findAnswerCards(document);
-      // 已渲染卡片还有未分析的（分析进行中/二审排队）→ 等消化完再预加载
-      if (cards.some((c) => !state.analyzed.has(c))) {
-        this.schedule();
-        return;
-      }
-      const count = cards.length;
-      const y = window.scrollY;
-      window.scrollTo(0, document.body.scrollHeight); // 触发知乎加载更多
-      // 知乎懒加载监听 scroll 事件：程序化 scrollTo 本身不触发其加载逻辑，需补发
-      window.dispatchEvent(new Event('scroll'));
-      // 短暂停留触发加载后立即恢复原位（停留越短越无感；实测 ~50ms 足够触发，
-      // 知乎在恢复后仍会后台加载渲染新卡片）
-      await sleep(this.TRIGGER_HOLD_MS);
-      window.scrollTo(0, y);
-      // 等新卡片渲染（加载请求约 400ms）
-      await sleep(500);
-      const countAfter = ZD.extract.findAnswerCards(document).length;
-      this.interval = countAfter > count ? 8_000 : this.IDLE_BACKOFF;
-      this.schedule();
-    },
-  };
-
   // 存储变化：覆盖/设置实时生效
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
@@ -672,6 +584,5 @@
     state.overrides = await ZD.storage.getOverrides();
     startObserver();
     analyzeAll();
-    preload.start();
   })();
 })();
