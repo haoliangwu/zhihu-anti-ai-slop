@@ -47,12 +47,11 @@ src/
   cloud/second-opinion.js  云端二审（缓存/限流/调用）
   background/service-worker.js  SW：二审路由
   options/               选项页
-scripts/generate-icons.py 图标生成（纯标准库）
 .scratch/mvp/            MVP spec 与实现 ticket（issue tracker）
 ```
 
 ## 限制
 
 - 仅支持 `zhihu.com/question/*` 问题页回答列表
-- 自定义 LLM API 域名需自行在 `manifest.json` 增加 host_permissions
+- 自定义 LLM API 域名在设置页保存时动态申请权限（仅 https，拒绝则二审不可用）
 - 规则引擎对文学性 / 古风文本有误报风险（二审提示词已显式规避）
