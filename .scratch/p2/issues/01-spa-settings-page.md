@@ -5,7 +5,8 @@ Status: resolved
 
 ## Answer
 
-已交付：options 升级为独立 SPA 设置页（`options_ui.open_in_tab: true`，SW `action.onClicked` → `openOptionsPage`，去掉 default_popup）；新增自定义正则规则 CRUD（无效正则保存前校验，`engine.score` 合并扣分并进理由面板）、judge prompt 编辑（textarea + 恢复默认，二审改用 `settings.judgePrompt`）、hideAiBody 开关。浏览器实测：规则添加/校验/生效、提示词落库、设置页全字段渲染均通过。
+已交付：options 升级为独立 SPA 设置页（`options_ui.open_in_tab: true`，SW `action.onClicked` → `openOptionsPage`，去掉 default_popup）；新增自定义正则规则 CRUD（增删改齐全：无效正则保存前校验，`engine.score` 合并扣分并进理由面板；规则行"编辑"回填表单、保存原地替换且 id 不变）、judge prompt 编辑（textarea + 恢复默认，二审改用 `settings.judgePrompt`）、hideAiBody 开关。浏览器实测：规则添加/编辑/校验/生效、提示词落库、设置页全字段渲染均通过。
+> 补充（P2 期间用户追加，随本任务交付）：回答卡片"重新判定"按钮（强制绕过二审缓存重跑，见 issue 02 面板操作）、设置页"清除二审缓存"按钮。
 Priority: P0
 
 将配置从 popup 体验迁移为**独立静态 SPA 设置页**（`chrome.runtime.openOptionsPage()` 全页打开，`open_in_tab: true`），并新增两类深度配置：

@@ -1,4 +1,4 @@
-# 02 — 专栏文章页支持
+# 03 — 专栏文章页支持
 
 Type: task
 Status: ready-for-agent
