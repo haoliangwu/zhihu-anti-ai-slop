@@ -31,8 +31,8 @@
 
 | 等级 | 条件 | 角标样式 |
 |---|---|---|
-| 确定 AI | `score ≤ thresholdConfirm`（默认 10） | 红色 |
-| 疑似 AI | `thresholdConfirm < score ≤ thresholdSuspect`（默认 40） | 橙色 |
+| 确定 AI | `score ≤ thresholdConfirm`（默认 40） | 红色 |
+| 疑似 AI | `thresholdConfirm < score ≤ thresholdSuspect`（默认 70） | 橙色 |
 | 正常 | `score > thresholdSuspect` | 绿色/中性 |
 | 已覆盖 | 存在用户覆盖 | 用户所选等级 + 覆盖标记 |
 
@@ -92,8 +92,8 @@
 
 | 项 | 默认 | 说明 |
 |---|---|---|
-| `thresholdConfirm` | 10 | 确定 AI 阈值 |
-| `thresholdSuspect` | 40 | 疑似 AI 阈值 |
+| `thresholdConfirm` | 40 | 确定 AI 阈值 |
+| `thresholdSuspect` | 70 | 疑似 AI 阈值 |
 | `fuzzyLow` / `fuzzyHigh` | 20 / 80 | 二审模糊带 |
 | `apiBaseUrl` | `https://api.deepseek.com/v1` | OpenAI 兼容地址 |
 | `apiKey` | 空 | 掩码显示，本地存储 |

@@ -18,8 +18,8 @@ Object.assign(globalThis.ZhihuDetector, {
 
   /** 默认配置（选项页可覆盖，存 chrome.storage.local[KEYS.SETTINGS]） */
   DEFAULTS: {
-    thresholdConfirm: 10,   // ≤ 此值 → 确定 AI
-    thresholdSuspect: 40,   // ≤ 此值 → 疑似 AI
+    thresholdConfirm: 40,   // ≤ 此值 → 确定 AI
+    thresholdSuspect: 70,   // ≤ 此值 → 疑似 AI
     fuzzyLow: 20,           // 二审模糊带下界
     fuzzyHigh: 80,          // 二审模糊带上界
     apiBaseUrl: 'https://api.deepseek.com/v1',
