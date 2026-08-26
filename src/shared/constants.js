@@ -38,6 +38,11 @@ Object.assign(globalThis.ZhihuDetector, {
     customTraces: [],
     /** 二审 system 提示词（可编辑，默认 = CLOUD_SYSTEM_PROMPT） */
     judgePrompt: '',
+    /** 二审额外请求参数（JSON 字符串，合并进 /chat/completions body 的顶层字段）。
+     *  默认 = DeepSeek：关闭思考模式（其下 temperature 等参数不生效）+ temperature 0；
+     *  留空 '' 则不发送任何额外参数，兼容性最好（纯 OpenAI / 严格校验的服务商）。
+     *  非法 JSON 在设置页保存时拦截，调用侧兜底忽略。 */
+    extraParams: '{"thinking":{"type":"disabled"},"temperature":0}',
   },
 
   /** 消息类型 */

@@ -100,22 +100,11 @@ async function callApi(text, settings, ruleContext) {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${settings.apiKey}`,
       },
-      body: JSON.stringify({
-        model: settings.apiModel,
-        messages: [
-          // system prompt 为动态模板：{{ai_slot_ctx}} 保留字替换为一审上下文；
-          // 模板不含保留字时自动追加（保证一审信息不丢失）
-          { role: 'system', content: buildSystemMessage(settings, ruleContext) },
-          { role: 'user', content: text },
-        ],
-        // 关闭思考模式（DeepSeek 参数）：二审是结构化打分任务，无需思维链，
-        // 关闭可显著降延迟/成本；且思考模式下 temperature/top_p 等参数不生效，
-        // 关闭后 temperature=0 才真正参与采样（降低打分波动）。
-        // 其他 OpenAI 兼容服务商通常忽略未知字段；遇严格校验者可删此行。
-        thinking: { type: 'disabled' },
-        temperature: 0,
-        response_format: { type: 'json_object' },
-      }),
+      // 请求体 = 核心字段（model/messages/response_format，强制覆盖）+
+      // 额外参数（settings.extraParams JSON config，按服务商兼容性配置）。
+      // 默认 = DeepSeek 关闭思考模式 + temperature 0；留空则不发送额外参数（最兼容）。
+      // 非法 JSON 忽略（降级为最兼容模式），不阻塞调用。
+      body: JSON.stringify(buildRequestBody(text, settings, ruleContext)),
       signal: controller.signal,
     });
     if (!resp.ok) return null;
@@ -141,6 +130,27 @@ async function callApi(text, settings, ruleContext) {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/** 组装 /chat/completions 请求体：额外参数（JSON config，先铺）+ 核心字段（强制覆盖）。
+ *  额外参数非法 JSON 时忽略（降级为最兼容模式），不阻塞调用。 */
+function buildRequestBody(text, settings, ruleContext) {
+  const body = {};
+  try {
+    const extra = settings.extraParams ? JSON.parse(settings.extraParams) : {};
+    if (extra && typeof extra === 'object' && !Array.isArray(extra)) Object.assign(body, extra);
+  } catch {
+    // 非法 JSON：调用侧兜底忽略额外参数
+  }
+  body.model = settings.apiModel;
+  body.messages = [
+    // system prompt 为动态模板：{{ai_slot_ctx}} 保留字替换为一审上下文；
+    // 模板不含保留字时自动追加（保证一审信息不丢失）
+    { role: 'system', content: buildSystemMessage(settings, ruleContext) },
+    { role: 'user', content: text },
+  ];
+  body.response_format = { type: 'json_object' };
+  return body;
 }
 
 /** 组装 system 消息：动态模板 + {{ai_slot_ctx}} 保留字替换/追加一审上下文 */

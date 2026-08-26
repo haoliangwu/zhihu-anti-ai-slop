@@ -14,4 +14,4 @@ Status: proposed
 
 - 选项页需提供 base URL / API key / 模型名三项配置，key 存 `chrome.storage.local`（不随账号同步、掩码显示）。
 - 二审结果**按回答正文 MD5 哈希 + 一审结果摘要为键**缓存（正文或一审判定变化 → 键变化 → 自动重判），滚动回看不重复调用。二审请求携带一审规则分与命中痕迹作为上下文，避免两级判定不一致。
-- **二审关闭思考模式**（`thinking: {type: "disabled"}`，DeepSeek 参数；OpenAI-compatible 接口）：二审是结构化打分任务（输出 JSON），无需思维链，关闭可显著降延迟与成本；且 DeepSeek 思考模式下 `temperature`/`top_p` 等参数**不生效**——实测开启时同文本打分 std≈26（temperature=0 被忽略），关闭后 temperature=0 真正生效，同文本 4 次重复调用打分完全一致（std=0），配合加权融合进一步降噪。
+- **二审关闭思考模式**（`thinking: {type: "disabled"}`，DeepSeek 参数；OpenAI-compatible 接口）：二审是结构化打分任务（输出 JSON），无需思维链，关闭可显著降延迟与成本；且 DeepSeek 思考模式下 `temperature`/`top_p` 等参数**不生效**——实测开启时同文本打分 std≈26（temperature=0 被忽略），关闭后 temperature=0 真正生效，同文本 4 次重复调用打分完全一致（std=0），配合加权融合进一步降噪。该参数与 temperature 等现通过**可配置的 `settings.extraParams`（JSON）**传递，设置页可编辑（留空则不发送任何额外参数，兼容各类 OpenAI 兼容服务商）；默认值 = DeepSeek 关闭思考模式 + temperature 0。

@@ -38,6 +38,9 @@
     $('hideAiBody').checked = settings.hideAiBody !== false;
     // 提示词总显示完整内容：未设置（''）时展示内置默认，用户可直接基于它修改
     $('judgePrompt').value = settings.judgePrompt || ZD.CLOUD_SYSTEM_PROMPT;
+    // 额外请求参数：直接显示存储值（默认 = DeepSeek 的 thinking disabled + temperature 0；
+    // 留空 = 不发送额外参数）
+    $('extraParams').value = settings.extraParams || '';
     // 二审权重滑块（0-100 显示，存储 0-1）
     const w = Math.round((settings.cloudScoreWeight ?? 0.6) * 100);
     $('cloudScoreWeight').value = w;
@@ -61,6 +64,7 @@
     // 覆盖形态：与内置默认完全一致时存 ''（等同使用内置），否则存全文
     const prompt = $('judgePrompt').value.trim();
     s.judgePrompt = prompt === ZD.CLOUD_SYSTEM_PROMPT ? '' : prompt;
+    s.extraParams = $('extraParams').value.trim();
     s.customTraces = collectTraces();
     return s;
   }
@@ -80,6 +84,16 @@
         new RegExp(t.pattern);
       } catch {
         return `自定义规则"${t.name}"的正则无效：${t.pattern}`;
+      }
+    }
+    if (s.extraParams) {
+      try {
+        const parsed = JSON.parse(s.extraParams);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          return '额外参数需为 JSON 对象（如 {"temperature": 0}）；留空则不发送额外参数';
+        }
+      } catch (e) {
+        return `额外参数 JSON 无效：${e.message}`;
       }
     }
     return null;
