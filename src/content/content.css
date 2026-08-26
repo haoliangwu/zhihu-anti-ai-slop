@@ -47,7 +47,8 @@
 .zys-level-skip       { color: #8590a6; background: rgba(133, 144, 166, 0.1);  border-color: rgba(133, 144, 166, 0.18); }
 
 /* 理由面板：流式展开（badge 下方的独立块，把正文推下去，不悬浮遮挡）；
- * 宽度自适应：跟随内容，短内容收窄、长内容封顶 560px，不超容器 */
+ * 宽度自适应：跟随内容，短内容收窄、长内容封顶 560px，不超容器；
+ * 内容宽度超过容器一半时（.zys-panel-full，由 JS 判定）直接占满父容器 */
 .zys-panel {
   width: fit-content;
   min-width: 320px;
@@ -60,9 +61,15 @@
   font-size: 13px;
   line-height: 1.6;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+
   border: 1px solid #ebebeb;
   text-align: left;
   box-sizing: border-box;
+}
+
+.zys-panel-full {
+  width: 100%;
+  max-width: 100%;
 }
 
 .zys-panel-title {

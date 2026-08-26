@@ -213,13 +213,14 @@
     p.className = 'zys-empty';
     p.textContent = `回答本身不足 ${minChars} 字，跳过 AI 判定。`;
     panel.appendChild(p);
-    badge.addEventListener('click', () => {
+    const togglePanel = () => {
       panel.hidden = !panel.hidden;
-    });
+    };
+    badge.addEventListener('click', togglePanel);
     badge.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        panel.hidden = !panel.hidden;
+        togglePanel();
       }
     });
 
@@ -280,6 +281,8 @@
     const panel = document.createElement('div');
     panel.className = 'zys-panel';
     panel.hidden = true;
+    // 二审面板含较长的 judge 反馈，直接占满父容器（100%）；一审痕迹面板保持自适应
+    if (result.source === 'cloud') panel.classList.add('zys-panel-full');
 
     const titleEl = document.createElement('div');
     titleEl.className = 'zys-panel-title';
@@ -362,13 +365,14 @@
       panel.appendChild(expandBtn);
     }
 
-    badge.addEventListener('click', () => {
+    const togglePanel = () => {
       panel.hidden = !panel.hidden;
-    });
+    };
+    badge.addEventListener('click', togglePanel);
     badge.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        panel.hidden = !panel.hidden;
+        togglePanel();
       }
     });
 
