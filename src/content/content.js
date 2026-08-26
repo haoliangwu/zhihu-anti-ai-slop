@@ -85,7 +85,9 @@
     const p = (async () => {
       const answerId = ZD.extract.getAnswerId(card);
       const text = ZD.extract.extractText(card, state.settings);
-      if (!text) {
+      // 字数下限：回答本身少于 minChars 字直接跳过判定（短文本判 AI 无意义，0 关闭）
+      const minChars = state.settings.minChars || 0;
+      if (!text || (minChars > 0 && ZD.extract.rawLength(card) < minChars)) {
         state.analyzed.add(card);
         return;
       }

@@ -18,6 +18,7 @@
     'apiModel',
     'cloudPerPageLimit',
     'maxChars',
+    'minChars',
   ];
 
   let currentSettings = { ...ZD.DEFAULTS };

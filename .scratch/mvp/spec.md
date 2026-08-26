@@ -81,6 +81,7 @@
 ## 8. 输入窗口
 
 - 正文来源：`.RichContent-inner`（含折叠文本，无需展开请求）；回退 `.RichContent`
+- **字数下限**：回答本身少于 `minChars` 字（默认 300）**直接跳过判定**（短文本判 AI 无意义；按原始正文长度计，不受 head 模式/截断影响；0 关闭）
 - 上限：`maxChars` 字（默认 2000，可配置 500–10000），截断
 - 开头净化：跳过标题区；若以图/引用开头，跳至首个文本段
 - 模式：`full`（全文）/ `head`（只看开头一两段，可配置切换）
@@ -97,6 +98,7 @@
 | `apiModel` | `deepseek-v4-flash` | 模型名 |
 | `cloudEnabled` | true | 二审开关 |
 | `maxChars` | 2000 | 输入窗口字数上限 |
+| `minChars` | 300 | 判定字数下限（回答少于该字数跳过，0 关闭） |
 | `windowMode` | `full` | full / head |
 | `cloudPerPageLimit` | 20 | 每页二审调用上限 |
 

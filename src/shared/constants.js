@@ -27,6 +27,7 @@ Object.assign(globalThis.ZhihuDetector, {
     apiModel: 'deepseek-v4-flash',
     cloudEnabled: true,
     maxChars: 2000,         // 输入窗口字数上限
+    minChars: 300,          // 判定字数下限：正文少于该字数直接跳过判定（0 关闭）
     windowMode: 'full',     // 'full' | 'head'（只看开头一两段）
     cloudPerPageLimit: 20,  // 每页二审调用上限
   },

@@ -52,6 +52,16 @@ ZD.extract = {
   },
 
   /**
+   * 回答本身字数（原始正文长度，未截断、不受 windowMode 影响）。
+   * 用于判定字数下限：短回答直接跳过，不渲染角标。
+   * @returns {number}
+   */
+  rawLength(card) {
+    const bodyEl = card.querySelector(ZD.extract.BODY_SELECTOR);
+    return bodyEl ? bodyEl.textContent.trim().length : 0;
+  },
+
+  /**
    * 提取输入窗口文本：跳过标题区、图/引用开头的空段落，
    * 按 maxChars 截断；windowMode='head' 时只看开头一两段。
    * @returns {string}

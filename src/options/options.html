@@ -72,6 +72,10 @@
         <input type="number" id="maxChars" min="200" max="10000" step="100" />
       </label>
       <label class="row">
+        <span>判定字数下限（回答少于该字数跳过判定，0 关闭）</span>
+        <input type="number" id="minChars" min="0" max="5000" step="50" />
+      </label>
+      <label class="row">
         <span>分析模式</span>
         <select id="windowMode">
           <option value="full">全文（截断至上限）</option>
