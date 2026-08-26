@@ -13,8 +13,6 @@
   const state = {
     settings: { ...ZD.DEFAULTS },
     overrides: {},
-    /** answerId -> 最近一次分析结果（含云端结果，用于重渲染） */
-    results: new Map(),
     /** 已分析卡片，避免 MutationObserver 重复触发 */
     analyzed: new WeakSet(),
     /** 进行中的分析，按卡片去重 */
@@ -27,7 +25,8 @@
 
   function requestSecondOpinion(text, rule, force) {
     return new Promise((resolve) => {
-      const timer = setTimeout(() => resolve(null), 35_000);
+      // 内容侧等待比 SW 超时（CLOUD_TIMEOUT_MS）略长，保证 SW 中止后本处必然收尾
+      const timer = setTimeout(() => resolve(null), ZD.CLOUD_TIMEOUT_MS + 5_000);
       try {
         chrome.runtime.sendMessage(
           {
@@ -55,7 +54,7 @@
   const cloudQueue = {
     queue: [],
     active: 0,
-    MAX: 2,
+    MAX: ZD.CLOUD_MAX_CONCURRENT,
     request(text, rule, force) {
       return new Promise((resolve) => {
         this.queue.push({ text, rule, force, resolve });
@@ -123,22 +122,27 @@
           answerId,
           override,
         };
-        state.results.set(answerId || card, result);
         renderBadge(card, result);
         state.analyzed.add(card);
         return;
       }
 
-      // 2) 文本稳定化 + 字数下限（短文本判 AI 无意义，0 关闭；以"跳过"角标标记）
+      // 2) 文本稳定化。正文提取为空（无正文块）→ 不判定也不显示角标
       const text = await extractStableText(card);
+      if (!text) {
+        state.analyzed.add(card);
+        return;
+      }
+
+      // 3) 字数下限：回答本身少于 minChars 判 AI 无意义，以"跳过"角标标记（0 关闭）
       const minChars = state.settings.minChars || 0;
-      if (!text || (minChars > 0 && ZD.extract.rawLength(card) < minChars)) {
+      if (minChars > 0 && ZD.extract.rawLength(card) < minChars) {
         state.analyzed.add(card);
         renderSkippedBadge(card, minChars);
         return;
       }
 
-      // 3) 规则初审（含用户自定义正则规则）
+      // 4) 规则初审（含用户自定义正则规则）
       const rule = ZD.engine.score(text, state.settings.customTraces || []);
       let result = {
         source: 'rule',
@@ -147,7 +151,7 @@
         answerId,
       };
 
-      // 4) 云端二审（模糊带 + 已配置；经内容侧队列限流，不丢弃；携带一审结果作上下文；
+      // 5) 云端二审（模糊带 + 已配置；经内容侧队列限流，不丢弃；携带一审结果作上下文；
       //    手动"重新判定"时 force=true 强制绕过缓存）
       if (answerId && cloudEligible(rule.score, state.settings)) {
         const force = state.forceRejudge.delete(answerId);
@@ -163,7 +167,6 @@
         }
       }
 
-      state.results.set(answerId || card, result);
       renderBadge(card, result);
       state.analyzed.add(card);
     })();
@@ -190,23 +193,34 @@
 
   // ---------- 角标渲染 ----------
 
-  const LEVEL_CLASS = { 'confirm-ai': 'zys-level-confirm-ai', 'suspect-ai': 'zys-level-suspect-ai', normal: 'zys-level-normal', skip: 'zys-level-skip' };
+  const LEVEL_CLASS = {
+    [ZD.LEVEL.CONFIRM_AI]: 'zys-level-confirm-ai',
+    [ZD.LEVEL.SUSPECT_AI]: 'zys-level-suspect-ai',
+    [ZD.LEVEL.NORMAL]: 'zys-level-normal',
+    [ZD.LEVEL.SKIP]: 'zys-level-skip',
+  };
+
+  /** 卡片正文元素（未渲染正文时返回 null） */
+  function bodyOf(card) {
+    return card.querySelector(ZD.extract.BODY_SELECTOR);
+  }
 
   /** 移除卡片上的旧角标/面板/加载占位（重渲染前清理） */
   function clearCardUI(card) {
     card.querySelectorAll('.zys-badge, .zys-panel, .zys-rejudging').forEach((el) => el.remove());
   }
 
+  /** 把元素插到正文前；无正文时置于卡片顶部（badge/panel/loading 统一入口） */
+  function insertBeforeBody(card, el) {
+    const anchor = bodyOf(card);
+    if (anchor) anchor.insertAdjacentElement('beforebegin', el);
+    else card.prepend(el);
+  }
+
   /** 流式插入：badge 在上、panel 在下、正文被推下（不悬浮遮挡） */
   function insertBadgePanel(card, badge, panel) {
-    const anchor = card.querySelector(ZD.extract.BODY_SELECTOR);
-    if (anchor) {
-      anchor.insertAdjacentElement('beforebegin', badge);
-      anchor.insertAdjacentElement('beforebegin', panel);
-    } else {
-      card.prepend(badge);
-      card.prepend(panel);
-    }
+    insertBeforeBody(card, badge);
+    insertBeforeBody(card, panel);
   }
 
   /** 绑定角标点击/回车切换面板 */
@@ -226,7 +240,7 @@
   /** 角标分数文案：覆盖显示 人/AI，其余显示分数 */
   function badgeScoreText(result) {
     if (result.source !== 'override') return String(result.score);
-    return result.verdict === 'ai' ? 'AI' : '人';
+    return result.verdict === ZD.VERDICT.AI ? 'AI' : '人';
   }
 
   /** 角标 meta 文案：已覆盖 / 二审 / N 条痕迹 / 未命中 */
@@ -270,9 +284,9 @@
 
   function levelOfResult(result) {
     if (result.source === 'override') {
-      return result.verdict === 'ai'
-        ? { level: 'confirm-ai', label: '覆盖·认为 AI' }
-        : { level: 'normal', label: '覆盖·认为人工' };
+      return result.verdict === ZD.VERDICT.AI
+        ? { level: ZD.LEVEL.CONFIRM_AI, label: '覆盖·认为 AI' }
+        : { level: ZD.LEVEL.NORMAL, label: '覆盖·认为人工' };
     }
     return ZD.engine.levelOf(result.score, state.settings);
   }
@@ -305,12 +319,13 @@
     const panel = document.createElement('div');
     panel.className = 'zys-panel';
     panel.hidden = true;
+    const isCloud = result.source === 'cloud';
     // 二审面板含较长的 judge 反馈，直接占满父容器（100%）；一审痕迹面板保持自适应
-    if (result.source === 'cloud') panel.classList.add('zys-panel-full');
+    if (isCloud) panel.classList.add('zys-panel-full');
 
     const titleEl = document.createElement('div');
     titleEl.className = 'zys-panel-title';
-    titleEl.textContent = `判定：${lv.label}` + (result.source === 'cloud' ? `（云端二审，人类置信度 ${result.score}）` : `（人类置信度 ${result.score}）`);
+    titleEl.textContent = `判定：${lv.label}` + (isCloud ? `（云端二审，人类置信度 ${result.score}）` : `（人类置信度 ${result.score}）`);
     panel.appendChild(titleEl);
 
     if (result.hits && result.hits.length > 0) {
@@ -367,16 +382,16 @@
         b.dataset.zysAction = action;
         actions.appendChild(b);
       };
-      mkBtn('认为人工', 'human');
-      mkBtn('认为 AI', 'ai');
+      mkBtn('认为人工', ZD.VERDICT.HUMAN);
+      mkBtn('认为 AI', ZD.VERDICT.AI);
       if (result.source === 'override') mkBtn('清除覆盖', 'clear');
       mkBtn('重新判定', 'rejudge');
       panel.appendChild(actions);
     }
 
     // P1：AI 判定 → 隐藏正文；原因与证据点击角标才展开（所有面板统一收起）
-    const bodyEl = card.querySelector(ZD.extract.BODY_SELECTOR);
-    const isAiLevel = lv.level === 'confirm-ai' || lv.level === 'suspect-ai';
+    const bodyEl = bodyOf(card);
+    const isAiLevel = lv.level === ZD.LEVEL.CONFIRM_AI || lv.level === ZD.LEVEL.SUSPECT_AI;
     const hideBody = isAiLevel && state.settings.hideAiBody;
     if (bodyEl) bodyEl.style.display = hideBody ? 'none' : ''; // 重渲染时重置可见性（SPA 后自动重新应用）
     if (hideBody && bodyEl) {
@@ -412,12 +427,9 @@
     label.textContent = '重新判定中…';
     loading.appendChild(spinner);
     loading.appendChild(label);
-    const anchor = card.querySelector(ZD.extract.BODY_SELECTOR);
-    if (anchor) anchor.insertAdjacentElement('beforebegin', loading);
-    else card.prepend(loading);
+    insertBeforeBody(card, loading);
 
     // 重置分析状态并重跑（renderBadge 会清理 loading）
-    state.results.delete(answerId);
     state.analyzed.delete(card);
     state.inFlight.delete(card);
     state.forceRejudge.add(answerId);
@@ -428,7 +440,7 @@
     if (!answerId) return;
     const override = {
       verdict,
-      score: verdict === 'ai' ? Math.min(state.settings.thresholdConfirm, 10) : 100,
+      score: verdict === ZD.VERDICT.AI ? Math.min(state.settings.thresholdConfirm, 10) : 100,
       note: 'manual',
       ts: Date.now(),
     };
@@ -441,7 +453,6 @@
     if (!answerId) return;
     await ZD.storage.removeOverride(answerId);
     delete state.overrides[answerId];
-    state.results.delete(answerId);
     state.analyzed.delete(card);
     await analyzeCard(card); // 重新按引擎判定
   }
@@ -453,7 +464,7 @@
     if (expandBtn) {
       e.stopPropagation();
       const card = expandBtn.closest(ZD.extract.CARD_SELECTOR);
-      const bodyEl = card ? card.querySelector(ZD.extract.BODY_SELECTOR) : null;
+      const bodyEl = card ? bodyOf(card) : null;
       if (card && bodyEl) {
         const hidden = bodyEl.style.display === 'none';
         bodyEl.style.display = hidden ? '' : 'none';
@@ -471,11 +482,11 @@
     const answerId = badge ? badge.dataset.zysAid : '';
     if (!answerId) return;
     switch (btn.dataset.zysAction) {
-      case 'human':
-        await applyOverride(card, answerId, 'human');
+      case ZD.VERDICT.HUMAN:
+        await applyOverride(card, answerId, ZD.VERDICT.HUMAN);
         break;
-      case 'ai':
-        await applyOverride(card, answerId, 'ai');
+      case ZD.VERDICT.AI:
+        await applyOverride(card, answerId, ZD.VERDICT.AI);
         break;
       case 'clear':
         await clearOverride(card, answerId);
@@ -526,7 +537,6 @@
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (message && message.type === ZD.MSG.REANALYZE) {
       state.analyzed = new WeakSet();
-      state.results.clear();
       analyzeAll();
       sendResponse({ ok: true });
     }
@@ -550,7 +560,6 @@
     if (changes[ZD.KEYS.SETTINGS]) {
       state.settings = { ...ZD.DEFAULTS, ...changes[ZD.KEYS.SETTINGS].newValue };
       state.analyzed = new WeakSet();
-      state.results.clear();
       analyzeAll();
     }
   });

@@ -25,6 +25,7 @@
 
   let currentSettings = { ...ZD.DEFAULTS };
   let traceDraftId = 0; // 新增规则的临时 id（保存时替换为时间戳 id）
+  let traceEditId = null; // 编辑中的规则 id（null = 新增模式）
 
   function fillForm(settings) {
     currentSettings = settings;
@@ -153,6 +154,11 @@
       const info = document.createElement('span');
       info.className = 'ov-info';
       info.textContent = `${t.name} — /${t.pattern}/ × ${t.weight} 分（上限 ${t.cap} 次）`;
+      const edit = document.createElement('button');
+      edit.type = 'button';
+      edit.className = 'mini';
+      edit.textContent = '编辑';
+      edit.addEventListener('click', () => startEditTrace(t));
       const del = document.createElement('button');
       del.type = 'button';
       del.className = 'mini';
@@ -160,12 +166,38 @@
       del.addEventListener('click', () => {
         const next = (currentSettings.customTraces || []).filter((x) => x.id !== t.id);
         currentSettings.customTraces = next;
+        if (traceEditId === t.id) resetTraceForm(); // 删除正在编辑的规则 → 退出编辑态
         renderTraces(next);
       });
       li.appendChild(info);
+      li.appendChild(edit);
       li.appendChild(del);
       list.appendChild(li);
     }
+  }
+
+  /** 进入编辑态：回填表单，提交按钮改为"保存修改" */
+  function startEditTrace(t) {
+    traceEditId = t.id;
+    $('traceFormTitle').textContent = '编辑规则';
+    $('addTraceBtn').textContent = '保存修改';
+    $('cancelEditBtn').hidden = false;
+    $('traceName').value = t.name;
+    $('tracePattern').value = t.pattern;
+    $('traceWeight').value = t.weight;
+    $('traceCap').value = t.cap;
+    $('traceError').hidden = true;
+  }
+
+  /** 退出编辑态并清空表单 */
+  function resetTraceForm() {
+    traceEditId = null;
+    $('traceFormTitle').textContent = '新增规则';
+    $('addTraceBtn').textContent = '添加规则';
+    $('cancelEditBtn').hidden = true;
+    $('traceName').value = '';
+    $('tracePattern').value = '';
+    $('traceError').hidden = true;
   }
 
   function collectTraces() {
@@ -198,14 +230,19 @@
     }
 
     errEl.hidden = true;
-    traceDraftId++;
-    const trace = { id: `custom-${Date.now()}-${traceDraftId}`, name, pattern, weight, cap };
-    const next = [...(currentSettings.customTraces || []), trace];
+    // 编辑态：原地替换该规则（id 不变，缓存键不受影响）；否则新增
+    let next;
+    if (traceEditId) {
+      next = (currentSettings.customTraces || []).map((x) =>
+        x.id === traceEditId ? { ...x, name, pattern, weight, cap } : x
+      );
+    } else {
+      traceDraftId++;
+      next = [...(currentSettings.customTraces || []), { id: `custom-${Date.now()}-${traceDraftId}`, name, pattern, weight, cap }];
+    }
     currentSettings.customTraces = next;
     renderTraces(next);
-    // 清空表单
-    $('traceName').value = '';
-    $('tracePattern').value = '';
+    resetTraceForm(); // 清空表单并退出编辑态
   }
 
   // ---------- 内置规则展示 ----------
@@ -237,7 +274,7 @@
       const info = document.createElement('span');
       info.className = 'ov-info';
       const when = ov.ts ? new Date(ov.ts).toLocaleString('zh-CN') : '未知时间';
-      info.textContent = `回答 ${answerId} — ${ov.verdict === 'ai' ? '认为 AI' : '认为人工'}（${when}）`;
+      info.textContent = `回答 ${answerId} — ${ov.verdict === ZD.VERDICT.AI ? '认为 AI' : '认为人工'}（${when}）`;
       const del = document.createElement('button');
       del.type = 'button';
       del.className = 'mini';
@@ -295,6 +332,7 @@
     setStatus('已恢复默认提示词（保存后生效）', true);
   });
   $('addTraceBtn').addEventListener('click', addTrace);
+  $('cancelEditBtn').addEventListener('click', resetTraceForm);
   $('clearCacheBtn').addEventListener('click', clearCache);
   $('cloudScoreWeight').addEventListener('input', () => {
     $('cloudScoreWeightVal').textContent = $('cloudScoreWeight').value + '%';

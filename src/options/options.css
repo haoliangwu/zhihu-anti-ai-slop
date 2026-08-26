@@ -212,6 +212,7 @@ button.primary.small {
 }
 .trace-form .row input[type="number"],
 .trace-form .row input[type="text"] { width: 100%; }
+.trace-btns { justify-content: flex-start; gap: 6px; }
 
 /* 内置规则折叠 */
 .builtin-traces {

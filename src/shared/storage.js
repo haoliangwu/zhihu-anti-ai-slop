@@ -48,7 +48,7 @@ ZD.storage = {
     return raw[KEYS.CACHE] || {};
   },
 
-  /** 写入二审缓存，超限按 ts 淘汰最旧条目（LRU 简化版） */
+  /** 写入二审缓存，超限按 ts 淘汰最旧条目（LRU：命中即刷新 ts，见 secondOpinion 缓存命中分支） */
   async setCacheEntry(answerId, entry) {
     const cache = await ZD.storage.getCache();
     cache[answerId] = entry;

@@ -9,7 +9,7 @@
 const ZD = globalThis.ZhihuDetector;
 
 ZD.cloud = {
-  maxConcurrent: 2,
+  maxConcurrent: ZD.CLOUD_MAX_CONCURRENT,
   inFlight: 0,
 
   /**
@@ -37,6 +37,10 @@ ZD.cloud = {
       const cache = await ZD.storage.getCache();
       const cached = cache[contentHash];
       if (cached && typeof cached.score === 'number') {
+        // LRU：命中即刷新 ts，淘汰时按 ts 取最旧（读不刷新的纯 FIFO 会让
+        // 高频回答长期占据缓存，见 spec 缓存键/淘汰约定）
+        cached.ts = Date.now();
+        await ZD.storage.setCacheEntry(contentHash, cached);
         return { score: cached.score, aiSignals: cached.aiSignals || [], humanSignals: cached.humanSignals || [], cached: true };
       }
     }
@@ -74,7 +78,7 @@ ZD.cloud = {
 function fuseScore(ruleScore, cloudScore, settings) {
   if (typeof ruleScore !== 'number') return cloudScore;
   const w = Math.min(1, Math.max(0, settings.cloudScoreWeight ?? 0.6));
-  return Math.max(0, Math.min(100, Math.round(w * cloudScore + (1 - w) * ruleScore)));
+  return ZD.clampScore(w * cloudScore + (1 - w) * ruleScore);
 }
 
 /** 一审结果摘要（用于缓存键：规则分 + 命中规则 id，排序保证稳定） */
@@ -119,10 +123,11 @@ async function callApi(text, settings, ruleContext) {
     const parsed = JSON.parse(content);
     let score = Number(parsed.score);
     if (!Number.isFinite(score)) return null;
-    score = Math.max(0, Math.min(100, Math.round(score))); // 钳制到 0–100
+    score = ZD.clampScore(score); // 钳制到 0–100
+    const v = parsed.verdict;
     return {
       score,
-      verdict: parsed.verdict === 'human' || parsed.verdict === 'mixed' || parsed.verdict === 'ai' ? parsed.verdict : 'mixed',
+      verdict: v === ZD.VERDICT.HUMAN || v === ZD.VERDICT.MIXED || v === ZD.VERDICT.AI ? v : ZD.VERDICT.MIXED,
       aiSignals: Array.isArray(parsed.ai_signals) ? parsed.ai_signals.slice(0, 8) : [],
       humanSignals: Array.isArray(parsed.human_signals) ? parsed.human_signals.slice(0, 8) : [],
     };

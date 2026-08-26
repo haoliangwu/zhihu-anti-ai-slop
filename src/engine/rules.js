@@ -42,12 +42,12 @@ ZD.engine = {
 
   /**
    * 把分数映射为等级（依赖阈值设置）。
-   * @returns {{level: 'confirm-ai'|'suspect-ai'|'normal', label: string}}
+   * @returns {{level: string, label: string}} level 取 ZD.LEVEL
    */
   levelOf(score, settings) {
-    if (score <= settings.thresholdConfirm) return { level: 'confirm-ai', label: '确定 AI' };
-    if (score <= settings.thresholdSuspect) return { level: 'suspect-ai', label: '疑似 AI' };
-    return { level: 'normal', label: '正常' };
+    if (score <= settings.thresholdConfirm) return { level: ZD.LEVEL.CONFIRM_AI, label: '确定 AI' };
+    if (score <= settings.thresholdSuspect) return { level: ZD.LEVEL.SUSPECT_AI, label: '疑似 AI' };
+    return { level: ZD.LEVEL.NORMAL, label: '正常' };
   },
 };
 })();

@@ -46,11 +46,25 @@ Object.assign(globalThis.ZhihuDetector, {
     REANALYZE: 'REANALYZE',
   },
 
-  /** 二审缓存上限（LRU 淘汰） */
+  /** 判定结论取值（覆盖记录 / 二审输出 / 消息统一使用，避免散落字面量） */
+  VERDICT: { AI: 'ai', HUMAN: 'human', MIXED: 'mixed' },
+
+  /** 判定等级（角标样式与文案的键） */
+  LEVEL: { CONFIRM_AI: 'confirm-ai', SUSPECT_AI: 'suspect-ai', NORMAL: 'normal', SKIP: 'skip' },
+
+  /** 二审并发上限：内容侧发送队列与 SW 侧执行共用同一上限 */
+  CLOUD_MAX_CONCURRENT: 2,
+
+  /** 二审缓存上限（LRU 淘汰，命中即刷新 ts） */
   CACHE_LIMIT: 500,
 
   /** 二审单次超时（ms） */
   CLOUD_TIMEOUT_MS: 30_000,
+
+  /** 钳制到 0–100 并取整（判定分统一出口） */
+  clampScore(v) {
+    return Math.max(0, Math.min(100, Math.round(v)));
+  },
 
   /** system prompt 模板保留字：代表动态拼接的一审（规则引擎）上下文 */
   CTX_SLOT: '{{ai_slot_ctx}}',
@@ -58,7 +72,7 @@ Object.assign(globalThis.ZhihuDetector, {
   /** 二审提示词系统消息（判定逻辑参考 stop-slop-zh 的中文 AI 写作信号分类；
    *  模板支持 {{ai_slot_ctx}} 保留字，调用时替换为一审结果） */
   CLOUD_SYSTEM_PROMPT: [
-    '你是"知乎 AI 答案检测器"的二审校验器。规则初审分数落在模糊带，需要你独立判断一段知乎回答正文是"人类撰写"还是"AI 生成"。',
+    '你是"知乎 AI 答案判定"的云端二审校验器。规则初审分数落在模糊带，需要你独立判断一段知乎回答正文是"人类撰写"还是"AI 生成"。',
     '判定方法：逐类检查以下 AI 写作信号，命中则记入 ai_signals；同时寻找人类写作信号记入 human_signals。先评估证据，再给分数。',
     '',
     'AI 信号（按类别）：',
