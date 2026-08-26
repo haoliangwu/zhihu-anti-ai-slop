@@ -76,9 +76,10 @@ async function callApi(text, settings, ruleContext) {
       body: JSON.stringify({
         model: settings.apiModel,
         messages: [
-          // 用户可编辑提示词；未设置（''）时用内置默认
-          { role: 'system', content: settings.judgePrompt || ZD.CLOUD_SYSTEM_PROMPT },
-          { role: 'user', content: buildUserMessage(text, ruleContext) },
+          // system prompt 为动态模板：{{ai_slot_ctx}} 保留字替换为一审上下文；
+          // 模板不含保留字时自动追加（保证一审信息不丢失）
+          { role: 'system', content: buildSystemMessage(settings, ruleContext) },
+          { role: 'user', content: text },
         ],
         temperature: 0,
         response_format: { type: 'json_object' },
@@ -109,23 +110,32 @@ async function callApi(text, settings, ruleContext) {
   }
 }
 
-/** 组装 user 消息：一审（规则引擎）结果 + 待复核正文 */
-function buildUserMessage(text, ruleContext) {
-  const parts = [];
-  if (ruleContext) {
-    parts.push('【一审（规则引擎）结果】');
-    parts.push(`规则分（人类置信度）：${ruleContext.ruleScore} / 100`);
-    const hits = ruleContext.hits || [];
-    if (hits.length) {
-      parts.push('命中的 AI 创作痕迹：');
-      hits.forEach((h) => parts.push(`- ${h.name} -${h.deduct} 分`));
-    } else {
-      parts.push('未命中任何 AI 创作痕迹。');
-    }
-    parts.push('');
-    parts.push('【待复核正文】');
+/** 组装 system 消息：动态模板 + {{ai_slot_ctx}} 保留字替换/追加一审上下文 */
+function buildSystemMessage(settings, ruleContext) {
+  const template = settings.judgePrompt || ZD.CLOUD_SYSTEM_PROMPT;
+  const ctx = buildFirstPassContext(ruleContext);
+  if (!ctx) {
+    // 无一审上下文时移除保留字（保留字本身不算有效指令）
+    return template.split(ZD.CTX_SLOT).join('').replace(/\n{3,}/g, '\n\n').trim();
   }
-  parts.push(text);
+  if (template.includes(ZD.CTX_SLOT)) {
+    return template.split(ZD.CTX_SLOT).join(ctx);
+  }
+  return template + '\n\n' + ctx;
+}
+
+/** 一审（规则引擎）上下文文本：规则分 + 命中痕迹清单 */
+function buildFirstPassContext(ruleContext) {
+  if (!ruleContext || typeof ruleContext.ruleScore !== 'number') return '';
+  const parts = [];
+  parts.push(`规则分（人类置信度）：${ruleContext.ruleScore} / 100`);
+  const hits = ruleContext.hits || [];
+  if (hits.length) {
+    parts.push('命中的 AI 创作痕迹：');
+    hits.forEach((h) => parts.push(`- ${h.name} -${h.deduct} 分`));
+  } else {
+    parts.push('未命中任何 AI 创作痕迹。');
+  }
   return parts.join('\n');
 }
 })();

@@ -68,7 +68,7 @@
       </label>
       <div class="field-block">
         <label for="judgePrompt">二审提示词（system）</label>
-        <p class="hint">保存时该提示词将<strong>整体覆盖</strong>默认提示词（正文仍作为单独的 user 消息追加发送）。下方默认显示内置提示词，可直接修改；改回默认内容即等同使用内置。</p>
+        <p class="hint">保存时该提示词将<strong>整体覆盖</strong>默认提示词（正文作为单独的 user 消息发送）。支持保留字 <code>{{ai_slot_ctx}}</code>：调用时替换为一审（规则引擎）的规则分与命中痕迹；模板不含保留字时自动追加到末尾。改回默认内容即等同使用内置。</p>
         <textarea id="judgePrompt" rows="8" spellcheck="false"></textarea>
         <button type="button" id="resetPrompt" class="mini">恢复默认提示词</button>
       </div>
