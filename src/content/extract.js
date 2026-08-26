@@ -26,11 +26,10 @@ ZD.extract = {
     const nodes = root.querySelectorAll(ZD.extract.CARD_SELECTOR);
     for (const node of nodes) {
       if (seen.has(node)) continue;
-      // 泛化的 .List-item 仅当其直接含正文时才视为回答卡片；
-      // 若内部已包含更具体的回答卡片容器，则跳过外层。
-      if (node.matches('.List-item') && node.querySelector('.Card.AnswerCard, .ContentItem.AnswerItem, .AnswerItem')) {
-        continue;
-      }
+      // 通用去重：若 node 内部还包含更具体的回答卡片容器（如
+      // .Card.AnswerCard 内嵌 .ContentItem.AnswerItem），node 只是外层
+      // 容器，跳过，只保留最内层卡片，避免同一回答渲染重叠角标。
+      if (node.querySelector(ZD.extract.CARD_SELECTOR)) continue;
       if (!node.querySelector(ZD.extract.BODY_SELECTOR)) continue;
       seen.add(node);
       cards.push(node);
