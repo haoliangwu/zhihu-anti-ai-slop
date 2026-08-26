@@ -1,0 +1,11 @@
+# macOS
+.DS_Store
+
+# Node
+node_modules/
+*.log
+
+# Chrome Web Store packaging
+*.crx
+*.pem
+dist/
