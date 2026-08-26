@@ -108,6 +108,11 @@ async function callApi(text, settings, ruleContext) {
           { role: 'system', content: buildSystemMessage(settings, ruleContext) },
           { role: 'user', content: text },
         ],
+        // 关闭思考模式（DeepSeek 参数）：二审是结构化打分任务，无需思维链，
+        // 关闭可显著降延迟/成本；且思考模式下 temperature/top_p 等参数不生效，
+        // 关闭后 temperature=0 才真正参与采样（降低打分波动）。
+        // 其他 OpenAI 兼容服务商通常忽略未知字段；遇严格校验者可删此行。
+        thinking: { type: 'disabled' },
         temperature: 0,
         response_format: { type: 'json_object' },
       }),
