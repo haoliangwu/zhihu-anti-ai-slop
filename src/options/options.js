@@ -303,6 +303,82 @@
     }
   }
 
+  // ---------- 作者管理 ----------
+
+  /**
+   * 从输入解析作者 token（people 主键）。
+   * 接受：完整/协议相对主页链接、people/xxx 片段、或裸 token。
+   * @returns {string|null} 非法格式返回 null
+   */
+  function parseAuthorInput(raw) {
+    const s = (raw || '').trim();
+    if (!s) return null;
+    const m = s.match(/(?:zhihu\.com|zhuanlan\.zhihu\.com)\/people\/([A-Za-z0-9_-]+)/);
+    if (m) return m[1];
+    const m2 = s.match(/people\/([A-Za-z0-9_-]+)/);
+    if (m2) return m2[1];
+    if (/^[A-Za-z0-9_-]{3,64}$/.test(s)) return s;
+    return null;
+  }
+
+  async function renderAuthorRules() {
+    const rules = await ZD.storage.getAuthorRules();
+    const list = $('authorList');
+    const empty = $('authorEmpty');
+    list.textContent = '';
+    const entries = [];
+    for (const [token, e] of Object.entries(rules.blocked || {})) entries.push({ token, kind: 'blocked', ...e });
+    for (const [token, e] of Object.entries(rules.trusted || {})) entries.push({ token, kind: 'trusted', ...e });
+    entries.sort((a, b) => (b.ts || 0) - (a.ts || 0));
+    empty.hidden = entries.length > 0;
+    for (const en of entries) {
+      const li = document.createElement('li');
+      const info = document.createElement('span');
+      info.className = 'ov-info author-list-info';
+      const nameEl = document.createElement('b');
+      nameEl.textContent = en.name || '（未知昵称）';
+      const kindEl = document.createElement('span');
+      kindEl.className = 'author-kind ' + (en.kind === 'blocked' ? 'kind-blocked' : 'kind-trusted');
+      kindEl.textContent = en.kind === 'blocked' ? '屏蔽' : '信任';
+      const tokenEl = document.createElement('code');
+      tokenEl.textContent = 'people/' + en.token;
+      const whenEl = document.createElement('span');
+      whenEl.className = 'author-when';
+      whenEl.textContent = en.ts ? new Date(en.ts).toLocaleString('zh-CN') : '未知时间';
+      info.append(nameEl, ' ', kindEl, ' ', tokenEl, ' ', whenEl);
+      const del = document.createElement('button');
+      del.type = 'button';
+      del.className = 'mini';
+      del.textContent = '移除';
+      del.addEventListener('click', async () => {
+        await ZD.storage.removeAuthorRule(en.kind, en.token);
+        await renderAuthorRules();
+        setStatus('已移除作者规则', true);
+      });
+      li.appendChild(info);
+      li.appendChild(del);
+      list.appendChild(li);
+    }
+  }
+
+  async function addAuthor() {
+    const raw = $('authorUrl').value;
+    const kind = $('authorKind').value;
+    const token = parseAuthorInput(raw);
+    const errEl = $('authorError');
+    if (!token) {
+      errEl.textContent = '无法识别作者主页：需为 zhihu.com/people/xxx 格式（可粘贴完整链接或 people/xxx）。';
+      errEl.hidden = false;
+      return;
+    }
+    errEl.hidden = true;
+    // 昵称由卡片操作时自动补全（按链接添加时未知）
+    await ZD.storage.setAuthorRule(kind, token, '');
+    $('authorUrl').value = '';
+    await renderAuthorRules();
+    setStatus(`已${kind === 'blocked' ? '屏蔽' : '信任'}作者（页面即时生效）`, true);
+  }
+
   // ---------- 二审缓存管理 ----------
 
   async function renderCacheInfo() {
@@ -353,15 +429,20 @@
   $('addTraceBtn').addEventListener('click', addTrace);
   $('cancelEditBtn').addEventListener('click', resetTraceForm);
   $('clearCacheBtn').addEventListener('click', clearCache);
+  $('addAuthorBtn').addEventListener('click', addAuthor);
+  $('authorUrl').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') addAuthor();
+  });
   $('cloudScoreWeight').addEventListener('input', () => {
     $('cloudScoreWeightVal').textContent = $('cloudScoreWeight').value + '%';
   });
 
-  // 存储变化：其他页面修改设置/覆盖/缓存时同步刷新
+  // 存储变化：其他页面修改设置/覆盖/作者规则/缓存时同步刷新
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
     if (changes[ZD.KEYS.SETTINGS]) fillForm(changes[ZD.KEYS.SETTINGS].newValue || ZD.DEFAULTS);
     if (changes[ZD.KEYS.OVERRIDES]) renderOverrides();
+    if (changes[ZD.KEYS.AUTHOR_RULES]) renderAuthorRules();
     if (changes[ZD.KEYS.CACHE]) renderCacheInfo();
   });
 
@@ -371,6 +452,7 @@
     const settings = await ZD.storage.getSettings();
     fillForm(settings);
     await renderOverrides();
+    await renderAuthorRules();
     await renderCacheInfo();
   })();
 })();

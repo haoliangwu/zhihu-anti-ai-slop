@@ -157,6 +157,26 @@
     </section>
 
     <section class="card">
+      <h2>作者管理</h2>
+      <p class="hint">
+        屏蔽 / 信任某个作者（以主页 <code>zhihu.com/people/xxx</code> 为唯一身份）。
+        屏蔽 = 该作者全部回答整卡占位、不做任何检测；信任 = 一轮不跑、仅显示灰色小签「已信任」。
+        作者级规则<strong>优先于</strong>卡片覆盖与引擎判定；与回答卡片面板上的「屏蔽该作者 / 信任该作者」双向同步。
+      </p>
+      <div class="author-add">
+        <input type="text" id="authorUrl" placeholder="https://www.zhihu.com/people/xxx 或 people/xxx" spellcheck="false" />
+        <select id="authorKind">
+          <option value="blocked">屏蔽</option>
+          <option value="trusted">信任</option>
+        </select>
+        <button type="button" id="addAuthorBtn" class="primary small">添加</button>
+      </div>
+      <p id="authorError" class="status err" hidden></p>
+      <ul id="authorList" class="override-list"></ul>
+      <p id="authorEmpty" class="hint">暂无屏蔽 / 信任作者。</p>
+    </section>
+
+    <section class="card">
       <h2>覆盖管理</h2>
       <p class="hint">你手动覆盖引擎判定的回答（按回答 ID 持久化，优先级高于引擎判定与二审）。</p>
       <ul id="overrideList" class="override-list"></ul>

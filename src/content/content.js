@@ -127,8 +127,15 @@
       const author = ZD.extract.getAuthor(card);
       const authorRule = author && !author.anonymous ? authorRuleFor(author.token) : null;
       if (authorRule) {
-        if (authorRule.kind === 'blocked') renderBlockedBar(card, author, authorRule.entry);
-        else renderTrustedChip(card, author, authorRule.entry);
+        // 昵称补全：选项页按主页链接添加的作者无昵称，首次在页面遇到时从 DOM 补全
+        //（仅名称变化时写一次，storage 监听触发重扫后名称一致即终止，无循环）
+        const entry = authorRule.entry;
+        if (author.name && entry.name !== author.name) {
+          state.authorRules[authorRule.kind][author.token] = { ...entry, name: author.name };
+          chrome.storage.local.set({ [ZD.KEYS.AUTHOR_RULES]: state.authorRules });
+        }
+        if (authorRule.kind === 'blocked') renderBlockedBar(card, author, entry);
+        else renderTrustedChip(card, author, entry);
         state.analyzed.add(card);
         state.ruleApplied.add(card);
         return;

@@ -275,3 +275,54 @@ button.primary.small {
   border-top: 1px solid #f0f2f4;
 }
 .data-actions .hint { margin: 0; }
+
+/* 作者管理 */
+.author-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+}
+.author-add input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border: 1px solid #d0d4da;
+  border-radius: 6px;
+  font-size: 13px;
+}
+.author-add select {
+  width: 88px;
+  padding: 6px 8px;
+  border: 1px solid #d0d4da;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #fff;
+}
+.author-kind {
+  display: inline-block;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 18px;
+  vertical-align: 1px;
+}
+.author-kind.kind-blocked {
+  color: #e64340;
+  background: rgba(230, 67, 64, 0.08);
+  border: 1px solid rgba(230, 67, 64, 0.22);
+}
+.author-kind.kind-trusted {
+  color: #8590a6;
+  background: rgba(133, 144, 166, 0.1);
+  border: 1px solid rgba(133, 144, 166, 0.18);
+}
+.author-list-info code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: #8590a6;
+}
+.author-list-info .author-when {
+  color: #a0a6ae;
+  font-size: 11px;
+}
