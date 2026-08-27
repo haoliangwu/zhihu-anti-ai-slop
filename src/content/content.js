@@ -127,17 +127,7 @@
       const author = ZD.extract.getAuthor(card);
       const authorRule = author && !author.anonymous ? authorRuleFor(author.token) : null;
       if (authorRule) {
-        // 昵称补全：选项页按主页链接添加的作者无昵称，首次在页面遇到时从 DOM 补全
-        //（仅名称变化时写一次，storage 监听触发重扫后名称一致即终止，无循环）
-        const entry = authorRule.entry;
-        if (author.name && entry.name !== author.name) {
-          state.authorRules[authorRule.kind][author.token] = { ...entry, name: author.name };
-          chrome.storage.local.set({ [ZD.KEYS.AUTHOR_RULES]: state.authorRules });
-        }
-        if (authorRule.kind === 'blocked') renderBlockedBar(card, author, entry);
-        else renderTrustedChip(card, author, entry);
-        state.analyzed.add(card);
-        state.ruleApplied.add(card);
+        applyAuthorRuleUI(card, author, authorRule);
         return;
       }
 
@@ -291,6 +281,38 @@
     return null;
   }
 
+  /**
+   * 应用作者规则 UI（屏蔽占位 / 信任小签）+ 昵称补全 + 状态标记。
+   * 幂等：同一作者已有规则 UI 则保留现状（[查看] 展开态不被打断）。
+   */
+  function applyAuthorRuleUI(card, author, rule) {
+    // 昵称补全：选项页按主页链接添加的作者无昵称，首次在页面遇到时从 DOM 补全
+    //（仅名称变化时写一次；storage 监听触发重扫后名称一致即终止，无循环）
+    const entry = rule.entry;
+    if (author.name && entry.name !== author.name) {
+      state.authorRules[rule.kind][author.token] = { ...entry, name: author.name };
+      chrome.storage.local.set({ [ZD.KEYS.AUTHOR_RULES]: state.authorRules });
+    }
+    if (rule.kind === 'blocked') renderBlockedBar(card, author, entry);
+    else renderTrustedChip(card, author, entry);
+    state.analyzed.add(card);
+    state.ruleApplied.add(card);
+  }
+
+  /**
+   * 渲染时刻的作者规则守卫：作者规则在渲染瞬间生效。
+   * 解决竞态——规则变化时卡片若正处于云端二审管道中（in-flight），旧管道
+   * 完成后仍会执行 render*，若不在渲染前再查一次规则，会把新渲染的
+   * 占位条/信任小签清掉并显示旧判定。@returns {boolean} 规则已应用（调用方应停止渲染）
+   */
+  function authorRuleRenderGuard(card) {
+    const author = ZD.extract.getAuthor(card);
+    const rule = author && !author.anonymous ? authorRuleFor(author.token) : null;
+    if (!rule) return false;
+    applyAuthorRuleUI(card, author, rule);
+    return true;
+  }
+
   /** 移除作者规则 UI（占位条/信任小签/信任面板）并恢复卡片内容显示 */
   function clearRuleUI(card) {
     card.querySelectorAll('.zys-blocked, .zys-trusted, .zys-trusted-panel').forEach((el) => el.remove());
@@ -423,6 +445,7 @@
    * 不可点击（无面板）；手动"重新判定"走独立的大 loading，不走到这里。
    */
   function renderPendingBadge(card, answerId, ruleScore) {
+    if (authorRuleRenderGuard(card)) return; // 渲染时刻作者规则优先（竞态守卫）
     if (card.querySelector('.zys-badge')) return;
     clearPanels(card);
     const badge = badgeOf(card);
@@ -464,6 +487,7 @@
    * 角标节点原位复用（跳过 ↔ 判定 双向切换不删除重建）。
    */
   function renderSkippedBadge(card, minChars) {
+    if (authorRuleRenderGuard(card)) return; // 渲染时刻作者规则优先（竞态守卫）
     clearPanels(card);
     const badge = badgeOf(card);
     badge.className = 'zys-badge zys-level-skip';
@@ -505,6 +529,7 @@
   }
 
   function renderBadge(card, result) {
+    if (authorRuleRenderGuard(card)) return; // 渲染时刻作者规则优先（竞态守卫）
     clearPanels(card); // 只清面板；角标节点原位更新（二审中→最终、跳过→判定，不闪动）
 
     const lv = levelOfResult(result);
@@ -772,18 +797,19 @@
   // ---------- 触发：初始 + 滚动 + 消息 ----------
 
   /** 按作者 token 集合重扫页面卡片（规则变化即时生效）。
-   *  跳过无作者/匿名卡；命中 token 的卡片重置后重跑 analyzeCard，
-   *  屏蔽/信任立即应用、取消立即恢复判定。 */
+   *  跳过无作者/匿名卡；命中 token 的卡片重置后立即重跑 analyzeCard（同步触发，
+   *  不等旧分析管道——渲染时刻的 authorRuleRenderGuard 保证旧管道完成后
+   *  渲染的是规则 UI 而非被覆盖的旧判定）。 */
   function reapplyAuthorRules(tokens) {
-    ZD.extract.findAnswerCards(document).forEach((card) => {
+    for (const card of ZD.extract.findAnswerCards(document)) {
       const author = ZD.extract.getAuthor(card);
-      if (!author || author.anonymous || !author.token) return;
-      if (!tokens.has(author.token)) return;
+      if (!author || author.anonymous || !author.token) continue;
+      if (!tokens.has(author.token)) continue;
       state.analyzed.delete(card);
       state.inFlight.delete(card);
       state.ruleApplied.delete(card);
       analyzeCard(card);
-    });
+    }
   }
 
   /** 正文变化重分析防抖（按卡片）：知乎渐进渲染（分段补全/图片懒加载等）
