@@ -1,12 +1,17 @@
 /**
  * 知乎照妖镜 — 存储助手
  * 依赖：constants.js（先加载）。
- * 提供：设置读写、覆盖读写、二审缓存读写。
+ * 提供：设置读写、覆盖读写、作者规则读写、二审缓存读写、二审预算读写。
  */
 (() => {
 'use strict';
 const ZD = globalThis.ZhihuDetector;
 const { KEYS, DEFAULTS } = ZD;
+
+/** 二审预算键：tab + 维度（answer/article 隔离，互不挤占） */
+function budgetKey(tabId, dim) {
+  return String(tabId) + ':' + (dim || 'answer');
+}
 
 ZD.storage = {
   /** 读取设置，未保存项取默认值 */
@@ -89,14 +94,14 @@ ZD.storage = {
   async getBudget(tabId, dim) {
     const raw = await chrome.storage.session.get(KEYS.BUDGET);
     const budgets = raw[KEYS.BUDGET] || {};
-    return budgets[String(tabId) + ':' + (dim || 'answer')] || { used: 0, ts: 0 };
+    return budgets[budgetKey(tabId, dim)] || { used: 0, ts: 0 };
   },
 
   /** 写回某 tab + 维度的预算 */
   async setBudget(tabId, dim, budget) {
     const raw = await chrome.storage.session.get(KEYS.BUDGET);
     const budgets = raw[KEYS.BUDGET] || {};
-    budgets[String(tabId) + ':' + (dim || 'answer')] = budget;
+    budgets[budgetKey(tabId, dim)] = budget;
     await chrome.storage.session.set({ [KEYS.BUDGET]: budgets });
   },
 };

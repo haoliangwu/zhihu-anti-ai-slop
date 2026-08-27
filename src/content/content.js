@@ -103,6 +103,28 @@
 
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+  /** 覆盖判定结果（卡片/文章覆盖分支统一构造） */
+  function overrideResult(overrideKey, override) {
+    return {
+      source: 'override',
+      verdict: override.verdict,
+      score: override.score,
+      answerId: overrideKey,
+      override,
+    };
+  }
+
+  /** 云端二审融合结果（卡片/文章二审返回后统一构造） */
+  function cloudResult(overrideKey, rule, cloud) {
+    return {
+      source: 'cloud',
+      score: cloud.score,
+      hits: rule.hits,
+      cloud: { aiSignals: cloud.aiSignals || [], humanSignals: cloud.humanSignals || [] },
+      answerId: overrideKey,
+    };
+  }
+
   /**
    * 稳定化提取：SPA 渐进渲染时内容会变化，连续两次采样一致才返回，
    * 避免在部分渲染态取文本（这是缓存哈希不稳定的主因）。
@@ -151,24 +173,12 @@
 
       // 0) 作者级硬规则（优先级最高，先于卡片覆盖与引擎判定）：
       //    屏蔽 → 整卡占位；信任 → 零判定小签。均不产生任何提取与判定调用。
-      const author = ZD.extract.getAuthor(card);
-      const authorRule = author && !author.anonymous ? authorRuleFor(author.token) : null;
-      if (authorRule) {
-        applyAuthorRuleUI(card, author, authorRule);
-        return;
-      }
+      if (applyAuthorRuleIfAny(card)) return;
 
       // 1) 覆盖优先（无需等待文本稳定，立即渲染）
       const override = overrideKey ? state.overrides[overrideKey] : null;
       if (override) {
-        const result = {
-          source: 'override',
-          verdict: override.verdict,
-          score: override.score,
-          answerId: overrideKey,
-          override,
-        };
-        renderBadge(card, result);
+        renderBadge(card, overrideResult(overrideKey, override));
         state.analyzed.add(card);
         state.cardText.set(card, extractCardText(card));
         return;
@@ -212,15 +222,7 @@
         // （手动"重新判定"已有独立大 loading，不重复渲染）
         if (!force) renderPendingBadge(card, overrideKey, rule.score);
         const cloud = await cloudQueue.request(text, rule, force, isArticle ? 'article' : 'answer');
-        if (cloud) {
-          result = {
-            source: 'cloud',
-            score: cloud.score,
-            hits: rule.hits,
-            cloud: { aiSignals: cloud.aiSignals || [], humanSignals: cloud.humanSignals || [] },
-            answerId: overrideKey,
-          };
-        }
+        if (cloud) result = cloudResult(overrideKey, rule, cloud);
       }
 
       renderBadge(card, result);
@@ -278,10 +280,7 @@
     state.article.analyzed = false;
 
     // 0) 作者规则（复用回答卡组件；占位条/信任小签同样作用于文章容器）
-    const author = ZD.extract.getAuthor(card);
-    const authorRule = author && !author.anonymous ? authorRuleFor(author.token) : null;
-    if (authorRule) {
-      applyAuthorRuleUI(card, author, authorRule);
+    if (applyAuthorRuleIfAny(card)) {
       state.article.analyzed = true;
       return;
     }
@@ -290,14 +289,7 @@
     const overrideKey = articleOverrideKey(articleId);
     const override = state.overrides[overrideKey];
     if (override) {
-      const result = {
-        source: 'override',
-        verdict: override.verdict,
-        score: override.score,
-        answerId: overrideKey,
-        override,
-      };
-      renderBadge(card, result);
+      renderBadge(card, overrideResult(overrideKey, override));
       state.article.analyzed = true;
       return;
     }
@@ -330,15 +322,7 @@
     if (cloudOn && (forceRejudge || cloudEligible(rule.score, state.settings))) {
       if (!forceRejudge) renderPendingBadge(card, overrideKey, rule.score);
       const cloud = await cloudQueue.request(text, rule, forceRejudge, 'article');
-      if (cloud) {
-        result = {
-          source: 'cloud',
-          score: cloud.score,
-          hits: rule.hits,
-          cloud: { aiSignals: cloud.aiSignals || [], humanSignals: cloud.humanSignals || [] },
-          answerId: overrideKey,
-        };
-      }
+      if (cloud) result = cloudResult(overrideKey, rule, cloud);
     }
 
     renderBadge(card, result);
@@ -413,12 +397,6 @@
     }
   }
 
-  /** 流式插入：badge 在上、panel 在下、正文被推下（不悬浮遮挡） */
-  function insertBadgePanel(card, badge, panel) {
-    insertBeforeBody(card, badge);
-    insertBeforeBody(card, panel);
-  }
-
   // ---------- 作者规则 UI ----------
 
   /** 查询作者 token 命中的规则 */
@@ -448,14 +426,16 @@
   }
 
   /**
-   * 渲染时刻的作者规则守卫：作者规则在渲染瞬间生效。
+   * 分析/渲染时刻的作者规则守卫：卡片作者命中规则 → 立即应用规则 UI。
    * 解决竞态——规则变化时卡片若正处于云端二审管道中（in-flight），旧管道
    * 完成后仍会执行 render*，若不在渲染前再查一次规则，会把新渲染的
-   * 占位条/信任小签清掉并显示旧判定。@returns {boolean} 规则已应用（调用方应停止渲染）
+   * 占位条/信任小签清掉并显示旧判定。
+   * @returns {boolean} 规则已应用（调用方应停止渲染）
    */
-  function authorRuleRenderGuard(card) {
+  function applyAuthorRuleIfAny(card) {
     const author = ZD.extract.getAuthor(card);
-    const rule = author && !author.anonymous ? authorRuleFor(author.token) : null;
+    if (!author || author.anonymous) return false;
+    const rule = authorRuleFor(author.token);
     if (!rule) return false;
     applyAuthorRuleUI(card, author, rule);
     return true;
@@ -593,7 +573,7 @@
    * 不可点击（无面板）；手动"重新判定"走独立的大 loading，不走到这里。
    */
   function renderPendingBadge(card, answerId, ruleScore) {
-    if (authorRuleRenderGuard(card)) return; // 渲染时刻作者规则优先（竞态守卫）
+    if (applyAuthorRuleIfAny(card)) return; // 渲染时刻作者规则优先（竞态守卫）
     if (card.querySelector('.zys-badge')) return;
     clearPanels(card);
     const badge = badgeOf(card);
@@ -610,6 +590,15 @@
     badge.appendChild(labelEl);
   }
 
+  /** 面板操作按钮（统一构造；action 为 zysAction 取值或判定 verdict） */
+  function actionButton(label, action) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    b.dataset.zysAction = action;
+    return b;
+  }
+
   /** 面板操作区追加作者级按钮（匿名/无作者卡不显示）。返回是否追加成功。 */
   function appendAuthorActions(actions, card) {
     const author = ZD.extract.getAuthor(card);
@@ -618,15 +607,8 @@
     sep.className = 'zys-actions-sep';
     sep.textContent = '作者';
     actions.appendChild(sep);
-    const mkBtn = (label, action) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.textContent = label;
-      b.dataset.zysAction = action;
-      actions.appendChild(b);
-    };
-    mkBtn('屏蔽该作者', 'block-author');
-    mkBtn('信任该作者', 'trust-author');
+    actions.appendChild(actionButton('屏蔽该作者', 'block-author'));
+    actions.appendChild(actionButton('信任该作者', 'trust-author'));
     return true;
   }
 
@@ -636,7 +618,7 @@
    * @param {string} [noun] 内容类型称谓（回答 / 文章）
    */
   function renderSkippedBadge(card, minChars, noun) {
-    if (authorRuleRenderGuard(card)) return; // 渲染时刻作者规则优先（竞态守卫）
+    if (applyAuthorRuleIfAny(card)) return; // 渲染时刻作者规则优先（竞态守卫）
     clearPanels(card);
     const badge = badgeOf(card);
     badge.className = 'zys-badge zys-level-skip';
@@ -679,7 +661,7 @@
   }
 
   function renderBadge(card, result) {
-    if (authorRuleRenderGuard(card)) return; // 渲染时刻作者规则优先（竞态守卫）
+    if (applyAuthorRuleIfAny(card)) return; // 渲染时刻作者规则优先（竞态守卫）
     clearPanels(card); // 只清面板；角标节点原位更新（二审中→最终、跳过→判定，不闪动）
 
     const lv = levelOfResult(result);
@@ -763,17 +745,10 @@
     if (result.answerId) {
       const actions = document.createElement('div');
       actions.className = 'zys-actions';
-      const mkBtn = (label, action) => {
-        const b = document.createElement('button');
-        b.type = 'button';
-        b.textContent = label;
-        b.dataset.zysAction = action;
-        actions.appendChild(b);
-      };
-      mkBtn('认为人工', ZD.VERDICT.HUMAN);
-      mkBtn('认为 AI', ZD.VERDICT.AI);
-      if (result.source === 'override') mkBtn('清除覆盖', 'clear');
-      mkBtn('重新判定', 'rejudge');
+      actions.appendChild(actionButton('认为人工', ZD.VERDICT.HUMAN));
+      actions.appendChild(actionButton('认为 AI', ZD.VERDICT.AI));
+      if (result.source === 'override') actions.appendChild(actionButton('清除覆盖', 'clear'));
+      actions.appendChild(actionButton('重新判定', 'rejudge'));
       // 作者级操作（匿名卡无作者可操作，不显示）
       appendAuthorActions(actions, card);
       panel.appendChild(actions);
@@ -887,25 +862,17 @@
       return;
     }
 
-    // 信任面板：取消信任
-    const untrustBtn = e.target.closest('[data-zys-untrust]');
-    if (untrustBtn) {
+    // 信任面板：取消信任 / 屏蔽该作者（按钮都位于 .zys-trusted 小签面板内）
+    const chipBtn = e.target.closest('[data-zys-untrust], [data-zys-block-author]');
+    if (chipBtn) {
       e.stopPropagation();
-      const card = cardOf(untrustBtn);
+      const card = cardOf(chipBtn);
       const chip = card && card.querySelector('.zys-trusted');
       const token = chip && chip.dataset.zysToken;
-      if (card && token) await ZD.storage.removeAuthorRule('trusted', token);
-      return;
-    }
-
-    // 信任面板：屏蔽该作者
-    const chipBlockBtn = e.target.closest('[data-zys-block-author]');
-    if (chipBlockBtn) {
-      e.stopPropagation();
-      const card = cardOf(chipBlockBtn);
-      const chip = card && card.querySelector('.zys-trusted');
-      const token = chip && chip.dataset.zysToken;
-      if (card && token) await ZD.storage.setAuthorRule('blocked', token, chip.dataset.zysName);
+      if (card && token) {
+        if (chipBtn.dataset.zysUntrust) await ZD.storage.removeAuthorRule('trusted', token);
+        else await ZD.storage.setAuthorRule('blocked', token, chip.dataset.zysName);
+      }
       return;
     }
 
@@ -949,7 +916,7 @@
 
   /** 按作者 token 集合重扫页面卡片（规则变化即时生效）。
    *  跳过无作者/匿名卡；命中 token 的卡片重置后立即重跑 analyzeCard（同步触发，
-   *  不等旧分析管道——渲染时刻的 authorRuleRenderGuard 保证旧管道完成后
+   *  不等旧分析管道——渲染时刻的 applyAuthorRuleIfAny 守卫保证旧管道完成后
    *  渲染的是规则 UI 而非被覆盖的旧判定）。 */
   function reapplyAuthorRules(tokens) {
     for (const card of ZD.extract.findAnswerCards(document)) {

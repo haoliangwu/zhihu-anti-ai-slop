@@ -199,15 +199,15 @@ ZD.extract = {
   },
 
   /**
-   * 文章列表卡输入窗口文本（文章设置组：headtail/full/head）。
-   * 折叠时 = 摘要；展开全文后文本变化 → 观察器按指纹自动重判。
+   * 文章输入窗口文本（共用实现）：head = 开头两段；headtail（默认）= 头尾
+   * 各取上限一半（万字长文也能覆盖结尾套话）；full = 全文截断至上限。
+   * @param {string[]} paras 正文段落
+   * @param {string} mode 抽样模式 'headtail' | 'full' | 'head'
+   * @param {number} max 输入窗口字数上限
    * @returns {string}
    */
-  extractArticleListText(card, settings) {
-    const paras = ZD.extract.articleListParagraphs(card);
+  windowText(paras, mode, max) {
     if (paras.length === 0) return '';
-    const mode = settings.articleWindowMode || 'headtail';
-    const max = settings.articleMaxChars || 4000;
     if (mode === 'head') return paras.slice(0, 2).join('\n');
     const body = paras.join('\n');
     if (mode === 'headtail' && max > 0 && body.length > max) {
@@ -219,24 +219,28 @@ ZD.extract = {
   },
 
   /**
-   * 提取文章输入窗口文本：跳过标题；按文章设置组抽样——
-   * headtail（默认）= 头尾各取上限一半（万字长文也能覆盖结尾套话）；
-   * full = 全文截断至上限；head = 只看开头一两段。
+   * 文章列表卡输入窗口文本（文章设置组：headtail/full/head）。
+   * 折叠时 = 摘要；展开全文后文本变化 → 观察器按指纹自动重判。
+   * @returns {string}
+   */
+  extractArticleListText(card, settings) {
+    return ZD.extract.windowText(
+      ZD.extract.articleListParagraphs(card),
+      settings.articleWindowMode || 'headtail',
+      settings.articleMaxChars || 4000
+    );
+  },
+
+  /**
+   * 提取文章输入窗口文本：跳过标题后按文章设置组抽样（见 windowText）。
    * @returns {string}
    */
   extractArticleText(articleEl, settings) {
-    const paras = ZD.extract.articleParagraphs(articleEl);
-    if (paras.length === 0) return '';
-    const mode = settings.articleWindowMode || 'headtail';
-    const max = settings.articleMaxChars || 4000;
-    if (mode === 'head') return paras.slice(0, 2).join('\n');
-    const body = paras.join('\n');
-    if (mode === 'headtail' && max > 0 && body.length > max) {
-      const half = Math.floor(max / 2);
-      return body.slice(0, half) + '\n……（中段省略）……\n' + body.slice(-half);
-    }
-    if (max > 0 && body.length > max) return body.slice(0, max);
-    return body;
+    return ZD.extract.windowText(
+      ZD.extract.articleParagraphs(articleEl),
+      settings.articleWindowMode || 'headtail',
+      settings.articleMaxChars || 4000
+    );
   },
 
   /**
