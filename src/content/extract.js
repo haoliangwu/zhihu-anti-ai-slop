@@ -8,8 +8,9 @@
 const ZD = globalThis.ZhihuDetector;
 
 ZD.extract = {
-  /** 回答卡片候选选择器（来自 research/zhihu-extension-facts.md） */
-  CARD_SELECTOR: '.List-item, .Card.AnswerCard, .ContentItem.AnswerItem, .AnswerItem',
+  /** 回答/文章列表卡片候选选择器（文章卡 .ContentItem.ArticleItem 与回答卡同构：
+   *  折叠摘要 RichContent + 阅读全文；纳入后 findAnswerCards 一并返回） */
+  CARD_SELECTOR: '.List-item, .Card.AnswerCard, .ContentItem.AnswerItem, .AnswerItem, .ContentItem.ArticleItem, .ArticleItem',
 
   /** 正文元素选择器（含折叠长文，无需展开请求） */
   BODY_SELECTOR: '.RichContent-inner, .RichContent',
@@ -100,6 +101,19 @@ ZD.extract = {
     return null;
   },
 
+  /**
+   * 从文章卡片提取文章 ID：/p/<id> 链接（列表卡与详情页共用同一 ID 命名空间）。
+   * @returns {string|null}
+   */
+  getArticleId(card) {
+    const link = card.querySelector('a[href*="/p/"]');
+    if (link) {
+      const m = link.getAttribute('href').match(/\/p\/(\d+)/);
+      if (m) return m[1];
+    }
+    return null;
+  },
+
   /** 真实正文块元素：跳过内嵌卡片/图片占位(noscript)/元数据，只取正文 */
   BODY_BLOCK_SELECTOR: 'p, li, blockquote, h1, h2, h3, h4, h5, h6, pre',
 
@@ -163,6 +177,45 @@ ZD.extract = {
   /** 文章本身字数（不含标题，未截断） */
   articleRawLength(articleEl) {
     return ZD.extract.articleParagraphs(articleEl).join('\n').length;
+  },
+
+  /**
+   * 文章列表卡正文段落（RichContent 折叠结构，与回答卡同构）。
+   * 防御：折叠摘要首段若与卡片标题相同则跳过。
+   * @returns {string[]}
+   */
+  articleListParagraphs(card) {
+    const paras = ZD.extract.paragraphsOf(card.querySelector(ZD.extract.BODY_SELECTOR));
+    if (paras.length) {
+      const title = card.querySelector('.ContentItem-title');
+      if (title && paras[0] === title.textContent.trim()) paras.shift();
+    }
+    return paras;
+  },
+
+  /** 文章列表卡本身字数（折叠摘要长度，未截断） */
+  articleListRawLength(card) {
+    return ZD.extract.articleListParagraphs(card).join('\n').length;
+  },
+
+  /**
+   * 文章列表卡输入窗口文本（文章设置组：headtail/full/head）。
+   * 折叠时 = 摘要；展开全文后文本变化 → 观察器按指纹自动重判。
+   * @returns {string}
+   */
+  extractArticleListText(card, settings) {
+    const paras = ZD.extract.articleListParagraphs(card);
+    if (paras.length === 0) return '';
+    const mode = settings.articleWindowMode || 'headtail';
+    const max = settings.articleMaxChars || 4000;
+    if (mode === 'head') return paras.slice(0, 2).join('\n');
+    const body = paras.join('\n');
+    if (mode === 'headtail' && max > 0 && body.length > max) {
+      const half = Math.floor(max / 2);
+      return body.slice(0, half) + '\n……（中段省略）……\n' + body.slice(-half);
+    }
+    if (max > 0 && body.length > max) return body.slice(0, max);
+    return body;
   },
 
   /**

@@ -121,13 +121,33 @@
   }
 
   /**
-   * 分析单张回答卡片，产出结果并渲染。
+   * 卡片输入窗口提取（按类型路由）：文章列表卡走文章设置组（headtail 抽样、
+   * 文章上限/下限），回答卡走回答设置组。正文变化重分析指纹也用它，
+   * 保证指纹与判定使用同一输入窗口。
+   */
+  function extractCardText(card) {
+    return isArticleListCard(card)
+      ? ZD.extract.extractArticleListText(card, state.settings)
+      : ZD.extract.extractText(card, state.settings);
+  }
+
+  /** 文章列表卡识别（与详情页容器 .Post-Main 区分） */
+  function isArticleListCard(card) {
+    return !!card.classList.contains('ArticleItem');
+  }
+
+  /**
+   * 分析单张回答/文章卡片，产出结果并渲染。
+   * 文章列表卡与回答卡共用管线，差异：ID 命名空间（'p'+文章ID）、
+   * 文章设置组（抽样/上限/下限）、二审预算维度（article 隔离）。
    * @returns {Promise<void>}
    */
   async function analyzeCard(card) {
     if (state.inFlight.has(card)) return state.inFlight.get(card);
     const p = (async () => {
-      const answerId = ZD.extract.getAnswerId(card);
+      const isArticle = isArticleListCard(card);
+      const rawId = isArticle ? ZD.extract.getArticleId(card) : ZD.extract.getAnswerId(card);
+      const overrideKey = isArticle && rawId ? articleOverrideKey(rawId) : rawId;
 
       // 0) 作者级硬规则（优先级最高，先于卡片覆盖与引擎判定）：
       //    屏蔽 → 整卡占位；信任 → 零判定小签。均不产生任何提取与判定调用。
@@ -139,35 +159,37 @@
       }
 
       // 1) 覆盖优先（无需等待文本稳定，立即渲染）
-      const override = answerId ? state.overrides[answerId] : null;
+      const override = overrideKey ? state.overrides[overrideKey] : null;
       if (override) {
         const result = {
           source: 'override',
           verdict: override.verdict,
           score: override.score,
-          answerId,
+          answerId: overrideKey,
           override,
         };
         renderBadge(card, result);
         state.analyzed.add(card);
-        state.cardText.set(card, ZD.extract.extractText(card, state.settings));
+        state.cardText.set(card, extractCardText(card));
         return;
       }
 
       // 2) 文本稳定化。正文提取为空（无正文块）→ 不判定也不显示角标
-      const text = await extractStableText(() => ZD.extract.extractText(card, state.settings));
+      const text = await extractStableText(() => extractCardText(card));
       if (!text) {
         state.analyzed.add(card);
         state.cardText.set(card, '');
         return;
       }
 
-      // 3) 字数下限：回答本身少于 minChars 判 AI 无意义，以"跳过"角标标记（0 关闭）
-      const minChars = state.settings.minChars || 0;
-      if (minChars > 0 && ZD.extract.rawLength(card) < minChars) {
+      // 3) 字数下限：内容本身少于 minChars 判 AI 无意义，以"跳过"角标标记（0 关闭）。
+      //    回答用回答下限、文章列表卡用文章下限（折叠摘要常 <300 → 跳过）
+      const minChars = isArticle ? state.settings.articleMinChars || 0 : state.settings.minChars || 0;
+      const rawLen = isArticle ? ZD.extract.articleListRawLength(card) : ZD.extract.rawLength(card);
+      if (minChars > 0 && rawLen < minChars) {
         state.analyzed.add(card);
         state.cardText.set(card, text);
-        renderSkippedBadge(card, minChars);
+        renderSkippedBadge(card, minChars, isArticle ? '文章' : undefined);
         return;
       }
 
@@ -177,28 +199,26 @@
         source: 'rule',
         score: rule.score,
         hits: rule.hits,
-        answerId,
+        answerId: overrideKey,
       };
 
       // 5) 云端二审：已配置 API 且（手动"重新判定"强制 或 分数落入模糊带）。
       //    经内容侧队列限流，不丢弃；携带一审结果作上下文。
-      //    手动"重新判定"（force）：一审为正则匹配、幂等，重跑必然同分且
-      //    正常（>模糊带上限）回答原不会进二审 → 强制二审绕过模糊带与缓存，
-      //    得到新的 judge 结论（force 也用于二审侧跳过缓存读）
-      const force = state.forceRejudge.delete(answerId);
+      //    文章卡二审走 article 预算维度（与回答隔离）。
+      const force = state.forceRejudge.delete(overrideKey);
       const cloudOn = state.settings.cloudEnabled && !!state.settings.apiKey;
-      if (answerId && cloudOn && (force || cloudEligible(rule.score, state.settings))) {
+      if (overrideKey && cloudOn && (force || cloudEligible(rule.score, state.settings))) {
         // 初次分析：二审等待期先渲染"规则分 + 二审中"角标作为反馈
         // （手动"重新判定"已有独立大 loading，不重复渲染）
-        if (!force) renderPendingBadge(card, answerId, rule.score);
-        const cloud = await cloudQueue.request(text, rule, force, 'answer');
+        if (!force) renderPendingBadge(card, overrideKey, rule.score);
+        const cloud = await cloudQueue.request(text, rule, force, isArticle ? 'article' : 'answer');
         if (cloud) {
           result = {
             source: 'cloud',
             score: cloud.score,
             hits: rule.hits,
             cloud: { aiSignals: cloud.aiSignals || [], humanSignals: cloud.humanSignals || [] },
-            answerId,
+            answerId: overrideKey,
           };
         }
       }
@@ -996,7 +1016,7 @@
           // 知乎会在 .RichContent 内追加操作栏/热评/Sticky 等 UI 节点，
           // 这类非正文变化若触发重分析，会把打开的理由面板重建为收起态、
           // 角标闪动，表现为"弹窗自动消失"。
-          if (ZD.extract.extractText(card, state.settings) === state.cardText.get(card)) {
+          if (extractCardText(card) === state.cardText.get(card)) {
             continue;
           }
           scheduleReanalyze(card);
@@ -1008,6 +1028,13 @@
           seen.add(card);
           cards.push(card);
         }
+      }
+      // 新增节点在卡片内部（正文晚于卡壳渲染，如文章列表卡摘要后置）：
+      // findAnswerCards 只查后代、找不到祖先卡 → 向上回溯最近未分析的卡片
+      const anc = node.closest(ZD.extract.CARD_SELECTOR);
+      if (anc && !state.analyzed.has(anc) && !seen.has(anc) && anc.querySelector(ZD.extract.BODY_SELECTOR)) {
+        seen.add(anc);
+        cards.push(anc);
       }
     }
     if (cards.length) analyzeCards(cards);
