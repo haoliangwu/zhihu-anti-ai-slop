@@ -42,6 +42,30 @@ ZD.storage = {
     await chrome.storage.local.set({ [KEYS.OVERRIDES]: overrides });
   },
 
+  /** 读取作者规则 { blocked: {token:{name,ts}}, trusted: {token:{name,ts}} } */
+  async getAuthorRules() {
+    const raw = await chrome.storage.local.get(KEYS.AUTHOR_RULES);
+    return raw[KEYS.AUTHOR_RULES] || { blocked: {}, trusted: {} };
+  },
+
+  /** 写入单条作者规则（kind: 'blocked' | 'trusted'）。
+   *  同一 token 在另一列表自动移除，保证两列表互斥（作者级规则唯一语义）。 */
+  async setAuthorRule(kind, token, name) {
+    const rules = await ZD.storage.getAuthorRules();
+    const other = kind === 'blocked' ? 'trusted' : 'blocked';
+    if (rules[other]) delete rules[other][token];
+    rules[kind][token] = { name: name || '', ts: Date.now() };
+    await chrome.storage.local.set({ [KEYS.AUTHOR_RULES]: rules });
+  },
+
+  /** 移除单条作者规则（不存在时静默） */
+  async removeAuthorRule(kind, token) {
+    const rules = await ZD.storage.getAuthorRules();
+    if (!(rules[kind] && token in rules[kind])) return;
+    delete rules[kind][token];
+    await chrome.storage.local.set({ [KEYS.AUTHOR_RULES]: rules });
+  },
+
   /** 读取二审缓存 { answerId: {score, aiSignals, humanSignals, ts} } */
   async getCache() {
     const raw = await chrome.storage.local.get(KEYS.CACHE);

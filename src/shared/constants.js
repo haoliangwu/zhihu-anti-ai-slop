@@ -12,6 +12,7 @@ Object.assign(globalThis.ZhihuDetector, {
   KEYS: {
     SETTINGS: 'settings',
     OVERRIDES: 'overrides',
+    AUTHOR_RULES: 'authorRules', // { blocked: {token:{name,ts}}, trusted: {...} }
     CACHE: 'secondOpinionCache',
     BUDGET: 'secondOpinionBudget', // chrome.storage.session，按 tab 计
   },

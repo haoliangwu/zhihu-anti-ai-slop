@@ -38,6 +38,47 @@ ZD.extract = {
   },
 
   /**
+   * 提取卡片作者：zhihu.com/people/<token> 为主键（稳定），昵称仅用于显示。
+   * 来源：知乎 SSR 输出的 meta[itemprop="url"/"name"]（稳定）优先，
+   *      兜底 a.UserLink-link（协议相对 //www.zhihu.com/people/…）。
+   * 匿名回答：有 .AuthorInfo 但无 people 链接 → { anonymous: true }；
+   * 无作者信息（非标准卡片）→ null。
+   * @returns {{token:string,name:string}|{anonymous:true}|null}
+   */
+  getAuthor(card) {
+    const info = card.querySelector('.AuthorInfo');
+    if (!info) return null;
+
+    let token = null;
+    const metaUrl = info.querySelector('meta[itemprop="url"]');
+    const urlContent = metaUrl && metaUrl.getAttribute('content');
+    if (urlContent) {
+      const m = urlContent.match(/\/people\/([^/?]+)/);
+      if (m) token = m[1];
+    }
+    if (!token) {
+      const link = info.querySelector('a[href*="/people/"]');
+      const href = link && link.getAttribute('href');
+      if (href) {
+        const m = href.match(/\/people\/([^/?]+)/);
+        if (m) token = m[1];
+      }
+    }
+    if (!token) return { anonymous: true };
+
+    let name = '';
+    const metaName = info.querySelector('meta[itemprop="name"]');
+    if (metaName && metaName.getAttribute('content')) {
+      name = metaName.getAttribute('content').trim();
+    }
+    if (!name) {
+      const link = info.querySelector('a[href*="/people/"]');
+      if (link) name = link.textContent.trim();
+    }
+    return { token, name };
+  },
+
+  /**
    * 从卡片提取回答 ID：优先 /answer/<aid> 链接。
    * @returns {string|null}
    */

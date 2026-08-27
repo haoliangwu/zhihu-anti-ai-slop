@@ -13,12 +13,18 @@
   const state = {
     settings: { ...ZD.DEFAULTS },
     overrides: {},
+    /** 作者规则 { blocked: {token:{name,ts}}, trusted: {token:{name,ts}} }
+     *  硬规则：优先级 作者级 > 卡片覆盖 > 引擎判定 */
+    authorRules: { blocked: {}, trusted: {} },
     /** 已分析卡片，避免 MutationObserver 重复触发 */
     analyzed: new WeakSet(),
     /** 进行中的分析，按卡片去重 */
     inFlight: new Map(),
     /** 手动"重新判定"的回答 ID 集合（二审强制绕过缓存） */
     forceRejudge: new Set(),
+    /** 作者规则已应用（屏蔽/信任）的卡片：正文变化不触发重分析，
+     *  规则由存储变化驱动，与内容无关 */
+    ruleApplied: new WeakSet(),
     /** 卡片 → 最近一次分析时的正文输入窗口文本。
      *  正文变化重分析的指纹：只有输入窗口文本真的变化才重分析，
      *  避免知乎在 .RichContent 内追加操作栏/热评等 UI 节点触发无谓重分析。 */
@@ -115,6 +121,18 @@
     if (state.inFlight.has(card)) return state.inFlight.get(card);
     const p = (async () => {
       const answerId = ZD.extract.getAnswerId(card);
+
+      // 0) 作者级硬规则（优先级最高，先于卡片覆盖与引擎判定）：
+      //    屏蔽 → 整卡占位；信任 → 零判定小签。均不产生任何提取与判定调用。
+      const author = ZD.extract.getAuthor(card);
+      const authorRule = author && !author.anonymous ? authorRuleFor(author.token) : null;
+      if (authorRule) {
+        if (authorRule.kind === 'blocked') renderBlockedBar(card, author, authorRule.entry);
+        else renderTrustedChip(card, author, authorRule.entry);
+        state.analyzed.add(card);
+        state.ruleApplied.add(card);
+        return;
+      }
 
       // 1) 覆盖优先（无需等待文本稳定，立即渲染）
       const override = answerId ? state.overrides[answerId] : null;
@@ -225,9 +243,11 @@
     card.querySelectorAll('.zys-badge, .zys-panel, .zys-rejudging').forEach((el) => el.remove());
   }
 
-  /** 只清面板与加载占位（render 路径：角标节点原位复用，不删除重建，避免闪动） */
+  /** 只清面板/加载占位与作者规则 UI（render 路径：角标节点原位复用，不删除重建，避免闪动；
+   *  作者规则 UI 是独立元素，正常判定渲染前必须移除并恢复卡片内容显示） */
   function clearPanels(card) {
-    card.querySelectorAll('.zys-panel, .zys-rejudging').forEach((el) => el.remove());
+    card.querySelectorAll('.zys-panel, .zys-rejudging, .zys-blocked, .zys-trusted, .zys-trusted-panel').forEach((el) => el.remove());
+    card.classList.remove('zys-rule-blocked', 'zys-viewing');
   }
 
   /** 取卡片现有角标节点，无则创建并插入；原位更新统一入口 */
@@ -251,6 +271,107 @@
   /** 流式插入：badge 在上、panel 在下、正文被推下（不悬浮遮挡） */
   function insertBadgePanel(card, badge, panel) {
     insertBeforeBody(card, badge);
+    insertBeforeBody(card, panel);
+  }
+
+  // ---------- 作者规则 UI ----------
+
+  /** 查询作者 token 命中的规则 */
+  function authorRuleFor(token) {
+    if (!token) return null;
+    if (state.authorRules.blocked[token]) return { kind: 'blocked', entry: state.authorRules.blocked[token] };
+    if (state.authorRules.trusted[token]) return { kind: 'trusted', entry: state.authorRules.trusted[token] };
+    return null;
+  }
+
+  /** 移除作者规则 UI（占位条/信任小签/信任面板）并恢复卡片内容显示 */
+  function clearRuleUI(card) {
+    card.querySelectorAll('.zys-blocked, .zys-trusted, .zys-trusted-panel').forEach((el) => el.remove());
+    card.classList.remove('zys-rule-blocked', 'zys-viewing');
+  }
+
+  /**
+   * 屏蔽占位条：整卡被占位层覆盖（正文/操作区不可见、不可交互），
+   * 仅显示「已屏蔽作者 X」+ [查看][取消屏蔽]。幂等：同一作者已有占位条
+   * （含 [查看] 展开态）则保留现状，避免重分析/规则重扫打断查看。
+   */
+  function renderBlockedBar(card, author, entry) {
+    const existing = card.querySelector('.zys-blocked');
+    if (existing && existing.dataset.zysToken === author.token) return;
+    clearCardUI(card);
+    clearRuleUI(card);
+    card.classList.add('zys-rule-blocked');
+
+    const bar = document.createElement('div');
+    bar.className = 'zys-blocked';
+    bar.dataset.zysToken = author.token;
+    const label = document.createElement('span');
+    label.className = 'zys-blocked-label';
+    label.textContent = `已屏蔽作者 ${entry.name || author.name || '（未知昵称）'}`;
+    const viewBtn = document.createElement('button');
+    viewBtn.type = 'button';
+    viewBtn.dataset.zysBlockView = '1';
+    viewBtn.textContent = '查看';
+    const unblockBtn = document.createElement('button');
+    unblockBtn.type = 'button';
+    unblockBtn.dataset.zysUnblock = '1';
+    unblockBtn.textContent = '取消屏蔽';
+    bar.appendChild(label);
+    bar.appendChild(viewBtn);
+    bar.appendChild(unblockBtn);
+    card.prepend(bar);
+  }
+
+  /**
+   * 信任小签：极低调灰色「已信任」，一轮不跑（零角标）；点击展开小面板，
+   * 可取消信任 / 改为屏蔽。幂等逻辑同屏蔽占位条。
+   */
+  function renderTrustedChip(card, author, entry) {
+    const existing = card.querySelector('.zys-trusted');
+    if (existing && existing.dataset.zysToken === author.token) return;
+    clearCardUI(card);
+    clearRuleUI(card);
+
+    const chip = document.createElement('div');
+    chip.className = 'zys-trusted';
+    chip.dataset.zysToken = author.token;
+    chip.dataset.zysName = entry.name || author.name || '';
+    chip.setAttribute('tabindex', '0');
+    chip.textContent = '已信任';
+
+    const panel = document.createElement('div');
+    panel.className = 'zys-trusted-panel';
+    panel.hidden = true;
+    const hint = document.createElement('p');
+    hint.className = 'zys-empty';
+    hint.textContent = `已信任作者 ${entry.name || author.name || '（未知昵称）'}：跳过全部检测，直接视为人工。`;
+    const actions = document.createElement('div');
+    actions.className = 'zys-actions';
+    const untrustBtn = document.createElement('button');
+    untrustBtn.type = 'button';
+    untrustBtn.dataset.zysUntrust = '1';
+    untrustBtn.textContent = '取消信任';
+    const blockBtn = document.createElement('button');
+    blockBtn.type = 'button';
+    blockBtn.dataset.zysBlockAuthor = '1';
+    blockBtn.textContent = '屏蔽该作者';
+    actions.appendChild(untrustBtn);
+    actions.appendChild(blockBtn);
+    panel.appendChild(hint);
+    panel.appendChild(actions);
+
+    const toggle = () => {
+      panel.hidden = !panel.hidden;
+    };
+    chip.addEventListener('click', toggle);
+    chip.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggle();
+      }
+    });
+
+    insertBeforeBody(card, chip);
     insertBeforeBody(card, panel);
   }
 
@@ -311,6 +432,26 @@
     badge.appendChild(labelEl);
   }
 
+  /** 面板操作区追加作者级按钮（匿名/无作者卡不显示）。返回是否追加成功。 */
+  function appendAuthorActions(actions, card) {
+    const author = ZD.extract.getAuthor(card);
+    if (!author || author.anonymous || !author.token) return false;
+    const sep = document.createElement('span');
+    sep.className = 'zys-actions-sep';
+    sep.textContent = '作者';
+    actions.appendChild(sep);
+    const mkBtn = (label, action) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = label;
+      b.dataset.zysAction = action;
+      actions.appendChild(b);
+    };
+    mkBtn('屏蔽该作者', 'block-author');
+    mkBtn('信任该作者', 'trust-author');
+    return true;
+  }
+
   /** 渲染"跳过"角标：回答本身字数少于 minChars，不判定。
    * 与"未命中"区分：跳过 = 太短不判；未命中 = 判了但没命中痕迹。
    * 角标节点原位复用（跳过 ↔ 判定 双向切换不删除重建）。
@@ -339,6 +480,10 @@
     p.className = 'zys-empty';
     p.textContent = `回答本身不足 ${minChars} 字，跳过 AI 判定。`;
     panel.appendChild(p);
+    // 跳过卡同样可操作作者（屏蔽/信任），与判定卡面板一致
+    const actions = document.createElement('div');
+    actions.className = 'zys-actions';
+    if (appendAuthorActions(actions, card)) panel.appendChild(actions);
     bindPanelToggle(badge, panel);
     insertBeforeBody(card, panel);
   }
@@ -447,6 +592,8 @@
       mkBtn('认为 AI', ZD.VERDICT.AI);
       if (result.source === 'override') mkBtn('清除覆盖', 'clear');
       mkBtn('重新判定', 'rejudge');
+      // 作者级操作（匿名卡无作者可操作，不显示）
+      appendAuthorActions(actions, card);
       panel.appendChild(actions);
     }
 
@@ -534,15 +681,72 @@
       return;
     }
 
+    // 屏蔽占位条：查看/收起正文（临时展开，页面重分析后仍保持屏蔽）
+    const viewBtn = e.target.closest('[data-zys-block-view]');
+    if (viewBtn) {
+      e.stopPropagation();
+      const card = viewBtn.closest(ZD.extract.CARD_SELECTOR);
+      if (card) {
+        const viewing = card.classList.toggle('zys-viewing');
+        viewBtn.textContent = viewing ? '收起' : '查看';
+      }
+      return;
+    }
+
+    // 屏蔽占位条：取消屏蔽（规则移除由 storage.onChanged 驱动重扫）
+    const unblockBtn = e.target.closest('[data-zys-unblock]');
+    if (unblockBtn) {
+      e.stopPropagation();
+      const card = unblockBtn.closest(ZD.extract.CARD_SELECTOR);
+      const bar = unblockBtn.closest('.zys-blocked');
+      const token = bar && bar.dataset.zysToken;
+      if (card && token) await ZD.storage.removeAuthorRule('blocked', token);
+      return;
+    }
+
+    // 信任面板：取消信任
+    const untrustBtn = e.target.closest('[data-zys-untrust]');
+    if (untrustBtn) {
+      e.stopPropagation();
+      const card = untrustBtn.closest(ZD.extract.CARD_SELECTOR);
+      const chip = card && card.querySelector('.zys-trusted');
+      const token = chip && chip.dataset.zysToken;
+      if (card && token) await ZD.storage.removeAuthorRule('trusted', token);
+      return;
+    }
+
+    // 信任面板：屏蔽该作者
+    const chipBlockBtn = e.target.closest('[data-zys-block-author]');
+    if (chipBlockBtn) {
+      e.stopPropagation();
+      const card = chipBlockBtn.closest(ZD.extract.CARD_SELECTOR);
+      const chip = card && card.querySelector('.zys-trusted');
+      const token = chip && chip.dataset.zysToken;
+      if (card && token) await ZD.storage.setAuthorRule('blocked', token, chip.dataset.zysName);
+      return;
+    }
+
     const btn = e.target.closest('[data-zys-action]');
     if (!btn) return;
     e.stopPropagation();
     const card = btn.closest(ZD.extract.CARD_SELECTOR);
     if (!card) return;
+
+    // 作者级操作不需要回答 ID（跳过卡面板同样可用；匿名卡按钮不渲染，此处兜底防错）
+    const action = btn.dataset.zysAction;
+    if (action === 'block-author' || action === 'trust-author') {
+      const a = ZD.extract.getAuthor(card);
+      if (a && !a.anonymous && a.token) {
+        const kind = action === 'block-author' ? 'blocked' : 'trusted';
+        await ZD.storage.setAuthorRule(kind, a.token, a.name);
+      }
+      return;
+    }
+
     const badge = card.querySelector('.zys-badge');
     const answerId = badge ? badge.dataset.zysAid : '';
     if (!answerId) return;
-    switch (btn.dataset.zysAction) {
+    switch (action) {
       case ZD.VERDICT.HUMAN:
         await applyOverride(card, answerId, ZD.VERDICT.HUMAN);
         break;
@@ -559,6 +763,21 @@
   });
 
   // ---------- 触发：初始 + 滚动 + 消息 ----------
+
+  /** 按作者 token 集合重扫页面卡片（规则变化即时生效）。
+   *  跳过无作者/匿名卡；命中 token 的卡片重置后重跑 analyzeCard，
+   *  屏蔽/信任立即应用、取消立即恢复判定。 */
+  function reapplyAuthorRules(tokens) {
+    ZD.extract.findAnswerCards(document).forEach((card) => {
+      const author = ZD.extract.getAuthor(card);
+      if (!author || author.anonymous || !author.token) return;
+      if (!tokens.has(author.token)) return;
+      state.analyzed.delete(card);
+      state.inFlight.delete(card);
+      state.ruleApplied.delete(card);
+      analyzeCard(card);
+    });
+  }
 
   /** 正文变化重分析防抖（按卡片）：知乎渐进渲染（分段补全/图片懒加载等）
    *  会产生多次正文变更，合并为一次重分析，避免角标反复原位更新造成闪动。 */
@@ -587,7 +806,9 @@
       // 该卡片已按摘要分析过 → 文本真的变化时防抖后按全文重新分析
       if (node.closest(ZD.extract.BODY_SELECTOR)) {
         const card = node.closest(ZD.extract.CARD_SELECTOR);
-        if (card && state.analyzed.has(card) && !seen.has(card)) {
+        // 作者规则已应用的卡片（屏蔽/信任）不随正文变化重分析：
+        // 规则由存储变化驱动，与内容无关（也避免重渲染打断占位条 [查看] 态）
+        if (card && state.analyzed.has(card) && !state.ruleApplied.has(card) && !seen.has(card)) {
           seen.add(card);
           // 只有正文输入窗口文本真的变化（如折叠预览展开）才重分析。
           // 知乎会在 .RichContent 内追加操作栏/热评/Sticky 等 UI 节点，
@@ -653,6 +874,19 @@
       state.analyzed = new WeakSet();
       analyzeAll();
     }
+    if (changes[ZD.KEYS.AUTHOR_RULES]) {
+      const oldRules = changes[ZD.KEYS.AUTHOR_RULES].oldValue || { blocked: {}, trusted: {} };
+      const newRules = changes[ZD.KEYS.AUTHOR_RULES].newValue || { blocked: {}, trusted: {} };
+      state.authorRules = newRules;
+      // 只重扫规则发生变化的作者（含跨页：选项页操作同样实时生效）
+      const changed = new Set([
+        ...Object.keys(oldRules.blocked),
+        ...Object.keys(oldRules.trusted),
+        ...Object.keys(newRules.blocked),
+        ...Object.keys(newRules.trusted),
+      ]);
+      reapplyAuthorRules(changed);
+    }
   });
 
   // ---------- 启动 ----------
@@ -660,6 +894,7 @@
   (async function init() {
     state.settings = await ZD.storage.getSettings();
     state.overrides = await ZD.storage.getOverrides();
+    state.authorRules = await ZD.storage.getAuthorRules();
     startObserver();
     analyzeAll();
   })();
