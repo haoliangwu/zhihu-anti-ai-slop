@@ -46,7 +46,7 @@
 .zys-level-normal     { color: #0a8f4e; background: rgba(10, 143, 78, 0.08); border-color: rgba(10, 143, 78, 0.22); }
 .zys-level-skip       { color: #8590a6; background: rgba(133, 144, 166, 0.1);  border-color: rgba(133, 144, 166, 0.18); }
 
-/* 二审进行中（初次分析）：轻量反馈角标，灰调 + 小转圈，不可点击 */
+/* 二审进行中（初次分析）：灰调反馈角标，显示规则一审分数 + "二审中"，不可点击 */
 .zys-badge.zys-pending {
   color: #8590a6;
   background: rgba(133, 144, 166, 0.1);

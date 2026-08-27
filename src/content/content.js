@@ -166,9 +166,9 @@
       const force = state.forceRejudge.delete(answerId);
       const cloudOn = state.settings.cloudEnabled && !!state.settings.apiKey;
       if (answerId && cloudOn && (force || cloudEligible(rule.score, state.settings))) {
-        // 初次分析：二审等待期先渲染轻量"二审中…"角标作为反馈
+        // 初次分析：二审等待期先渲染"规则分 + 二审中"角标作为反馈
         // （手动"重新判定"已有独立大 loading，不重复渲染）
-        if (!force) renderPendingBadge(card, answerId);
+        if (!force) renderPendingBadge(card, answerId, rule.score);
         const cloud = await cloudQueue.request(text, rule, force);
         if (cloud) {
           result = {
@@ -288,24 +288,26 @@
   }
 
   /**
-   * 二审进行中的轻量反馈角标：初次分析时规则初审已完成、云端二审尚未返回，
-   * 先渲染"二审中…"（小转圈），二审完成后原位更新为最终角标。
+   * 二审进行中的反馈角标：初次分析时规则初审已完成、云端二审尚未返回，
+   * 直接显示规则一审分数 + "二审中"标签（灰调），二审完成后原位更新为
+   * 融合分与最终判定——角标从开始就有数字，只微调不跳变。
    * 已有判定角标的卡片（正文变化重分析）不降级为"二审中"，保留旧结果直至新结果就绪。
    * 不可点击（无面板）；手动"重新判定"走独立的大 loading，不走到这里。
    */
-  function renderPendingBadge(card, answerId) {
+  function renderPendingBadge(card, answerId, ruleScore) {
     if (card.querySelector('.zys-badge')) return;
     clearPanels(card);
     const badge = badgeOf(card);
     badge.className = 'zys-badge zys-pending';
     badge.dataset.zysAid = answerId || '';
     badge.textContent = '';
-    const spinner = document.createElement('span');
-    spinner.className = 'zys-spinner zys-spinner-sm';
+    const scoreEl = document.createElement('span');
+    scoreEl.className = 'zys-score';
+    scoreEl.textContent = String(ruleScore);
     const labelEl = document.createElement('span');
     labelEl.className = 'zys-level';
-    labelEl.textContent = '二审中…';
-    badge.appendChild(spinner);
+    labelEl.textContent = '二审中';
+    badge.appendChild(scoreEl);
     badge.appendChild(labelEl);
   }
 
