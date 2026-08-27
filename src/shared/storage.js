@@ -84,18 +84,19 @@ ZD.storage = {
     await chrome.storage.local.set({ [KEYS.CACHE]: cache });
   },
 
-  /** 读取某 tab 的本页二审预算（chrome.storage.session，SW 重启后仍有效） */
-  async getBudget(tabId) {
+  /** 读取某 tab + 维度（answer/article）的本页二审预算（chrome.storage.session，SW 重启后仍有效）。
+   *  回答与文章预算隔离，互不挤占（文章判定不消耗回答的每页调用上限）。 */
+  async getBudget(tabId, dim) {
     const raw = await chrome.storage.session.get(KEYS.BUDGET);
     const budgets = raw[KEYS.BUDGET] || {};
-    return budgets[String(tabId)] || { used: 0, ts: 0 };
+    return budgets[String(tabId) + ':' + (dim || 'answer')] || { used: 0, ts: 0 };
   },
 
-  /** 写回某 tab 的预算 */
-  async setBudget(tabId, budget) {
+  /** 写回某 tab + 维度的预算 */
+  async setBudget(tabId, dim, budget) {
     const raw = await chrome.storage.session.get(KEYS.BUDGET);
     const budgets = raw[KEYS.BUDGET] || {};
-    budgets[String(tabId)] = budget;
+    budgets[String(tabId) + ':' + (dim || 'answer')] = budget;
     await chrome.storage.session.set({ [KEYS.BUDGET]: budgets });
   },
 };

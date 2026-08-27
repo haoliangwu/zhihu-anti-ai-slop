@@ -29,11 +29,15 @@
      *  正文变化重分析的指纹：只有输入窗口文本真的变化才重分析，
      *  避免知乎在 .RichContent 内追加操作栏/热评等 UI 节点触发无谓重分析。 */
     cardText: new WeakMap(),
+    /** 文章详情页状态（同一时刻至多一篇；SPA 导航时按 pathname 重建） */
+    article: { id: null, card: null, analyzed: false, text: '' },
+    /** 上次见到的 pathname（文章页 SPA 导航检测） */
+    lastPath: location.pathname,
   };
 
   // ---------- 云端二审请求（内容侧队列：≤2 并发，其余排队，不丢弃） ----------
 
-  function requestSecondOpinion(text, rule, force) {
+  function requestSecondOpinion(text, rule, force, dimension) {
     return new Promise((resolve) => {
       // 内容侧等待比 SW 超时（CLOUD_TIMEOUT_MS）略长，保证 SW 中止后本处必然收尾
       const timer = setTimeout(() => resolve(null), ZD.CLOUD_TIMEOUT_MS + 5_000);
@@ -47,6 +51,8 @@
             hits: rule.hits.map((h) => ({ id: h.id, name: h.name, deduct: h.deduct })),
             // 手动"重新判定"时强制绕过缓存重新调用
             force: !!force,
+            // 预算维度：文章与回答隔离
+            dimension: dimension || 'answer',
           },
           (resp) => {
             clearTimeout(timer);
@@ -65,9 +71,9 @@
     queue: [],
     active: 0,
     MAX: ZD.CLOUD_MAX_CONCURRENT,
-    request(text, rule, force) {
+    request(text, rule, force, dimension) {
       return new Promise((resolve) => {
-        this.queue.push({ text, rule, force, resolve });
+        this.queue.push({ text, rule, force, dimension, resolve });
         this.pump();
       });
     },
@@ -75,7 +81,7 @@
       while (this.active < this.MAX && this.queue.length) {
         const item = this.queue.shift();
         this.active++;
-        requestSecondOpinion(item.text, item.rule, item.force).then((result) => {
+        requestSecondOpinion(item.text, item.rule, item.force, item.dimension).then((result) => {
           this.active--;
           item.resolve(result);
           this.pump();
@@ -98,15 +104,16 @@
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   /**
-   * 稳定化提取：SPA 渐进渲染时卡片内容会变化，连续两次采样一致才返回，
+   * 稳定化提取：SPA 渐进渲染时内容会变化，连续两次采样一致才返回，
    * 避免在部分渲染态取文本（这是缓存哈希不稳定的主因）。
    * 最多等 4 轮（约 2s），仍不稳定则返回最后一次采样。
+   * @param {() => string} extractor 每次采样的提取函数（回答/文章各自封装）
    */
-  async function extractStableText(card) {
-    let prev = ZD.extract.extractText(card, state.settings);
+  async function extractStableText(extractor) {
+    let prev = extractor();
     for (let i = 0; i < 4; i++) {
       await sleep(500);
-      const cur = ZD.extract.extractText(card, state.settings);
+      const cur = extractor();
       if (cur === prev) return cur;
       prev = cur;
     }
@@ -148,7 +155,7 @@
       }
 
       // 2) 文本稳定化。正文提取为空（无正文块）→ 不判定也不显示角标
-      const text = await extractStableText(card);
+      const text = await extractStableText(() => ZD.extract.extractText(card, state.settings));
       if (!text) {
         state.analyzed.add(card);
         state.cardText.set(card, '');
@@ -184,7 +191,7 @@
         // 初次分析：二审等待期先渲染"规则分 + 二审中"角标作为反馈
         // （手动"重新判定"已有独立大 loading，不重复渲染）
         if (!force) renderPendingBadge(card, answerId, rule.score);
-        const cloud = await cloudQueue.request(text, rule, force);
+        const cloud = await cloudQueue.request(text, rule, force, 'answer');
         if (cloud) {
           result = {
             source: 'cloud',
@@ -206,6 +213,122 @@
     } finally {
       state.inFlight.delete(card);
     }
+  }
+
+  // ---------- 文章详情页判定 ----------
+
+  /** 是否文章详情页（/p/<id>；www 与 zhuanlan.zhihu.com 同构 Post-* 布局） */
+  function isArticlePage() {
+    return /^\/p\/\d+/.test(location.pathname);
+  }
+
+  /** 文章容器识别：含文章标题且无回答正文（回答卡与文章卡不重叠） */
+  function isArticleCard(card) {
+    return !!card.querySelector(ZD.extract.ARTICLE_TITLE_SELECTOR) && !card.querySelector(ZD.extract.BODY_SELECTOR);
+  }
+
+  /** 文章覆盖键：'p'+id 前缀隔离命名空间（与回答 ID 不冲突） */
+  function articleOverrideKey(articleId) {
+    return 'p' + articleId;
+  }
+
+  /** 事件元素所属容器：回答卡或文章卡（两者共用同一套面板/占位组件） */
+  function cardOf(el) {
+    return el.closest(ZD.extract.CARD_SELECTOR) || el.closest(ZD.extract.ARTICLE_CARD_SELECTOR);
+  }
+
+  /**
+   * 文章详情页判定管线：作者规则 → 覆盖 → 文章专用提取（跳标题 + 头尾抽样）→
+   * 一审 → 二审（预算维度隔离，不消耗回答的每页上限）。
+   * hideAiBody 不作用于文章正文（仅角标提示，不藏文）。
+   * @param {boolean} [force] 跳过幂等守卫（路径变化/规则与设置变化/重新判定时）
+   */
+  async function analyzeArticle(force) {
+    if (!isArticlePage()) return;
+    const m = location.pathname.match(/^\/p\/(\d+)/);
+    if (!m) return;
+    const articleId = m[1];
+    const card = document.querySelector(ZD.extract.ARTICLE_CARD_SELECTOR);
+    if (!card) return; // 404 / 未渲染：无角标不报错
+
+    // 幂等：同一篇文章同一容器已分析则跳过（SPA 渐进渲染期间的重复触发）
+    if (!force && state.article.analyzed && state.article.id === articleId && state.article.card === card) return;
+    state.article.id = articleId;
+    state.article.card = card;
+    state.article.analyzed = false;
+
+    // 0) 作者规则（复用回答卡组件；占位条/信任小签同样作用于文章容器）
+    const author = ZD.extract.getAuthor(card);
+    const authorRule = author && !author.anonymous ? authorRuleFor(author.token) : null;
+    if (authorRule) {
+      applyAuthorRuleUI(card, author, authorRule);
+      state.article.analyzed = true;
+      return;
+    }
+
+    // 1) 覆盖（'p'+id 命名空间，与回答覆盖互不干扰）
+    const overrideKey = articleOverrideKey(articleId);
+    const override = state.overrides[overrideKey];
+    if (override) {
+      const result = {
+        source: 'override',
+        verdict: override.verdict,
+        score: override.score,
+        answerId: overrideKey,
+        override,
+      };
+      renderBadge(card, result);
+      state.article.analyzed = true;
+      return;
+    }
+
+    // 2) 提取：文章专用（跳标题、头尾抽样、文章设置组），稳定化防渐进渲染。
+    //    正文可能懒渲染（init 时 .Post-content 未出现 → 文本为空）：此时记录空指纹，
+    //    观察器发现正文文本变化后再重试。
+    const text = await extractStableText(() => ZD.extract.extractArticleText(card, state.settings));
+    state.article.text = text;
+    if (!text) {
+      state.article.analyzed = true;
+      return;
+    }
+
+    // 3) 字数下限（文章设置组独立）
+    const minChars = state.settings.articleMinChars || 0;
+    if (minChars > 0 && ZD.extract.articleRawLength(card) < minChars) {
+      state.article.analyzed = true;
+      renderSkippedBadge(card, minChars, '文章');
+      return;
+    }
+
+    // 4) 规则初审（阈值与回答共享）
+    const rule = ZD.engine.score(text, state.settings.customTraces || []);
+    let result = { source: 'rule', score: rule.score, hits: rule.hits, answerId: overrideKey };
+
+    // 5) 云端二审（维度 = article，预算独立；手动"重新判定"强制绕过缓存）
+    const forceRejudge = state.forceRejudge.delete(overrideKey);
+    const cloudOn = state.settings.cloudEnabled && !!state.settings.apiKey;
+    if (cloudOn && (forceRejudge || cloudEligible(rule.score, state.settings))) {
+      if (!forceRejudge) renderPendingBadge(card, overrideKey, rule.score);
+      const cloud = await cloudQueue.request(text, rule, forceRejudge, 'article');
+      if (cloud) {
+        result = {
+          source: 'cloud',
+          score: cloud.score,
+          hits: rule.hits,
+          cloud: { aiSignals: cloud.aiSignals || [], humanSignals: cloud.humanSignals || [] },
+          answerId: overrideKey,
+        };
+      }
+    }
+
+    renderBadge(card, result);
+    state.article.analyzed = true;
+  }
+  /** 清理文章规则 UI（离开文章页时调用） */
+  function cleanupArticleUI(card) {
+    if (!card) return;
+    clearCardUI(card);
+    clearRuleUI(card);
   }
 
   /** 分批处理一组卡片，rAF 节流避免阻塞主线程 */
@@ -258,11 +381,16 @@
     return badge;
   }
 
-  /** 把元素插到正文前；无正文时置于卡片顶部（badge/panel/loading 统一入口） */
+  /** 把元素插到正文前；无正文时置于卡片顶部（badge/panel/loading 统一入口）。
+   *  文章详情页容器无回答正文 → 插到标题前（角标/面板在标题/作者区旁）。 */
   function insertBeforeBody(card, el) {
     const anchor = bodyOf(card);
     if (anchor) anchor.insertAdjacentElement('beforebegin', el);
-    else card.prepend(el);
+    else {
+      const title = card.querySelector(ZD.extract.ARTICLE_TITLE_SELECTOR);
+      if (title) title.insertAdjacentElement('beforebegin', el);
+      else card.prepend(el);
+    }
   }
 
   /** 流式插入：badge 在上、panel 在下、正文被推下（不悬浮遮挡） */
@@ -482,11 +610,12 @@
     return true;
   }
 
-  /** 渲染"跳过"角标：回答本身字数少于 minChars，不判定。
+  /** 渲染"跳过"角标：内容本身字数少于 minChars，不判定。
    * 与"未命中"区分：跳过 = 太短不判；未命中 = 判了但没命中痕迹。
    * 角标节点原位复用（跳过 ↔ 判定 双向切换不删除重建）。
+   * @param {string} [noun] 内容类型称谓（回答 / 文章）
    */
-  function renderSkippedBadge(card, minChars) {
+  function renderSkippedBadge(card, minChars, noun) {
     if (authorRuleRenderGuard(card)) return; // 渲染时刻作者规则优先（竞态守卫）
     clearPanels(card);
     const badge = badgeOf(card);
@@ -504,12 +633,13 @@
     metaEl.textContent = `少于 ${minChars} 字`;
     badge.appendChild(metaEl);
 
+    const nounText = noun || '回答';
     const panel = document.createElement('div');
     panel.className = 'zys-panel';
     panel.hidden = true;
     const p = document.createElement('p');
     p.className = 'zys-empty';
-    p.textContent = `回答本身不足 ${minChars} 字，跳过 AI 判定。`;
+    p.textContent = `${nounText}本身不足 ${minChars} 字，跳过 AI 判定。`;
     panel.appendChild(p);
     // 跳过卡同样可操作作者（屏蔽/信任），与判定卡面板一致
     const actions = document.createElement('div');
@@ -669,11 +799,12 @@
     loading.appendChild(label);
     insertBeforeBody(card, loading);
 
-    // 重置分析状态并重跑（renderBadge 会清理 loading）
+    // 重置分析状态并重跑（render 会清理 loading）；文章容器走文章管线
     state.analyzed.delete(card);
     state.inFlight.delete(card);
     state.forceRejudge.add(answerId);
-    await analyzeCard(card);
+    if (isArticleCard(card)) await analyzeArticle(true);
+    else await analyzeCard(card);
   }
 
   async function applyOverride(card, answerId, verdict) {
@@ -703,7 +834,7 @@
     const expandBtn = e.target.closest('[data-zys-expand]');
     if (expandBtn) {
       e.stopPropagation();
-      const card = expandBtn.closest(ZD.extract.CARD_SELECTOR);
+      const card = cardOf(expandBtn);
       const bodyEl = card ? bodyOf(card) : null;
       if (card && bodyEl) {
         const hidden = bodyEl.style.display === 'none';
@@ -717,7 +848,7 @@
     const viewBtn = e.target.closest('[data-zys-block-view]');
     if (viewBtn) {
       e.stopPropagation();
-      const card = viewBtn.closest(ZD.extract.CARD_SELECTOR);
+      const card = cardOf(viewBtn);
       if (card) {
         const viewing = card.classList.toggle('zys-viewing');
         viewBtn.textContent = viewing ? '收起' : '查看';
@@ -729,7 +860,7 @@
     const unblockBtn = e.target.closest('[data-zys-unblock]');
     if (unblockBtn) {
       e.stopPropagation();
-      const card = unblockBtn.closest(ZD.extract.CARD_SELECTOR);
+      const card = cardOf(unblockBtn);
       const bar = unblockBtn.closest('.zys-blocked');
       const token = bar && bar.dataset.zysToken;
       if (card && token) await ZD.storage.removeAuthorRule('blocked', token);
@@ -740,7 +871,7 @@
     const untrustBtn = e.target.closest('[data-zys-untrust]');
     if (untrustBtn) {
       e.stopPropagation();
-      const card = untrustBtn.closest(ZD.extract.CARD_SELECTOR);
+      const card = cardOf(untrustBtn);
       const chip = card && card.querySelector('.zys-trusted');
       const token = chip && chip.dataset.zysToken;
       if (card && token) await ZD.storage.removeAuthorRule('trusted', token);
@@ -751,7 +882,7 @@
     const chipBlockBtn = e.target.closest('[data-zys-block-author]');
     if (chipBlockBtn) {
       e.stopPropagation();
-      const card = chipBlockBtn.closest(ZD.extract.CARD_SELECTOR);
+      const card = cardOf(chipBlockBtn);
       const chip = card && card.querySelector('.zys-trusted');
       const token = chip && chip.dataset.zysToken;
       if (card && token) await ZD.storage.setAuthorRule('blocked', token, chip.dataset.zysName);
@@ -761,7 +892,7 @@
     const btn = e.target.closest('[data-zys-action]');
     if (!btn) return;
     e.stopPropagation();
-    const card = btn.closest(ZD.extract.CARD_SELECTOR);
+    const card = cardOf(btn);
     if (!card) return;
 
     // 作者级操作不需要回答 ID（跳过卡面板同样可用；匿名卡按钮不渲染，此处兜底防错）
@@ -831,6 +962,24 @@
   }
 
   function processAddedNodes(nodes) {
+    // 文章详情页：SPA 导航（pathname 变化）或文章容器出现/替换 → 分析；
+    // 离开文章页 → 清理文章规则 UI
+    const pathChanged = location.pathname !== state.lastPath;
+    state.lastPath = location.pathname;
+    if (isArticlePage()) {
+      const cur = document.querySelector(ZD.extract.ARTICLE_CARD_SELECTOR);
+      if (pathChanged) analyzeArticle(true);
+      else if (cur && cur !== state.article.card) analyzeArticle();
+      else if (!state.article.analyzed) analyzeArticle();
+      // 正文懒渲染：文本指纹变化（如 .Post-content 延迟出现）→ 重试
+      else if (state.article.card && ZD.extract.extractArticleText(state.article.card, state.settings) !== state.article.text) {
+        analyzeArticle(true);
+      }
+    } else if (state.article.analyzed && state.article.card) {
+      cleanupArticleUI(state.article.card);
+      state.article = { id: null, card: null, analyzed: false };
+    }
+
     const cards = [];
     const seen = new Set();
     for (const node of nodes) {
@@ -901,11 +1050,17 @@
         const aid = badge && badge.dataset.zysAid;
         if (aid && changed.has(aid)) analyzeCard(card);
       });
+      // 文章覆盖（'p'+id 命名空间）
+      if (state.article.id) {
+        const key = articleOverrideKey(state.article.id);
+        if (changed.has(key)) analyzeArticle(true);
+      }
     }
     if (changes[ZD.KEYS.SETTINGS]) {
       state.settings = { ...ZD.DEFAULTS, ...changes[ZD.KEYS.SETTINGS].newValue };
       state.analyzed = new WeakSet();
       analyzeAll();
+      analyzeArticle(true); // 文章设置/阈值变化 → 文章重判
     }
     if (changes[ZD.KEYS.AUTHOR_RULES]) {
       const oldRules = changes[ZD.KEYS.AUTHOR_RULES].oldValue || { blocked: {}, trusted: {} };
@@ -919,6 +1074,12 @@
         ...Object.keys(newRules.trusted),
       ]);
       reapplyAuthorRules(changed);
+      // 文章详情页作者规则即时生效
+      const articleCard = document.querySelector(ZD.extract.ARTICLE_CARD_SELECTOR);
+      if (articleCard) {
+        const a = ZD.extract.getAuthor(articleCard);
+        if (a && a.token && changed.has(a.token)) analyzeArticle(true);
+      }
     }
   });
 
@@ -930,5 +1091,6 @@
     state.authorRules = await ZD.storage.getAuthorRules();
     startObserver();
     analyzeAll();
+    analyzeArticle();
   })();
 })();

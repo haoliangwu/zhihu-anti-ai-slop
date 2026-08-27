@@ -14,6 +14,15 @@ ZD.extract = {
   /** 正文元素选择器（含折叠长文，无需展开请求） */
   BODY_SELECTOR: '.RichContent-inner, .RichContent',
 
+  /** 文章详情页容器（zhuanlan.zhihu.com 与 www.zhihu.com 的 /p/* 同构，Post-* 布局） */
+  ARTICLE_CARD_SELECTOR: '.Post-Main, .Post-NormalMain',
+
+  /** 文章正文容器（.Post-content 是外层包装、含整篇文章，正文段落在其内层 .Post-RichTextContainer） */
+  ARTICLE_BODY_SELECTOR: '.Post-RichTextContainer',
+
+  /** 文章标题（角标/面板挂载锚点：标题前） */
+  ARTICLE_TITLE_SELECTOR: 'h1.Post-Title',
+
   /**
    * 在 root 内查找回答卡片，去重并过滤掉不含正文的容器。
    * @param {ParentNode} root
@@ -95,13 +104,13 @@ ZD.extract = {
   BODY_BLOCK_SELECTOR: 'p, li, blockquote, h1, h2, h3, h4, h5, h6, pre',
 
   /**
-   * 提取正文段落（只走块级正文元素）。
+   * 提取正文段落（共用实现：块级正文元素优先，兜底整段切分）。
    * 知乎正文以 <p> 为主；NOSCRIPT 里的图片标记文本、内嵌卡片动态数字
    * （如"50 赞同 · 1 评论"）都被排除，避免内容级哈希不稳定。
+   * @param {Element|null} bodyEl 正文容器元素
    * @returns {string[]}
    */
-  bodyParagraphs(card) {
-    const bodyEl = card.querySelector(ZD.extract.BODY_SELECTOR);
+  paragraphsOf(bodyEl) {
     if (!bodyEl) return [];
     let paras = Array.from(bodyEl.querySelectorAll(ZD.extract.BODY_BLOCK_SELECTOR))
       .map((el) => el.textContent.trim())
@@ -121,12 +130,60 @@ ZD.extract = {
   },
 
   /**
+   * 提取正文段落（回答卡片）。
+   * @returns {string[]}
+   */
+  bodyParagraphs(card) {
+    return ZD.extract.paragraphsOf(card.querySelector(ZD.extract.BODY_SELECTOR));
+  },
+
+  /**
+   * 提取文章正文段落：跳过首段标题（.Post-content 内嵌 H1 文章标题）。
+   * @returns {string[]}
+   */
+  articleParagraphs(articleEl) {
+    const bodyEl = articleEl.querySelector(ZD.extract.ARTICLE_BODY_SELECTOR);
+    const paras = ZD.extract.paragraphsOf(bodyEl);
+    if (paras.length) {
+      const title = articleEl.querySelector(ZD.extract.ARTICLE_TITLE_SELECTOR);
+      if (title && paras[0] === title.textContent.trim()) paras.shift();
+    }
+    return paras;
+  },
+
+  /**
    * 回答本身字数（正文段落总长，未截断、不受 windowMode 影响）。
    * 用于判定字数下限：短回答直接跳过，不渲染角标。
    * @returns {number}
    */
   rawLength(card) {
     return ZD.extract.bodyParagraphs(card).join('\n').length;
+  },
+
+  /** 文章本身字数（不含标题，未截断） */
+  articleRawLength(articleEl) {
+    return ZD.extract.articleParagraphs(articleEl).join('\n').length;
+  },
+
+  /**
+   * 提取文章输入窗口文本：跳过标题；按文章设置组抽样——
+   * headtail（默认）= 头尾各取上限一半（万字长文也能覆盖结尾套话）；
+   * full = 全文截断至上限；head = 只看开头一两段。
+   * @returns {string}
+   */
+  extractArticleText(articleEl, settings) {
+    const paras = ZD.extract.articleParagraphs(articleEl);
+    if (paras.length === 0) return '';
+    const mode = settings.articleWindowMode || 'headtail';
+    const max = settings.articleMaxChars || 4000;
+    if (mode === 'head') return paras.slice(0, 2).join('\n');
+    const body = paras.join('\n');
+    if (mode === 'headtail' && max > 0 && body.length > max) {
+      const half = Math.floor(max / 2);
+      return body.slice(0, half) + '\n……（中段省略）……\n' + body.slice(-half);
+    }
+    if (max > 0 && body.length > max) return body.slice(0, max);
+    return body;
   },
 
   /**

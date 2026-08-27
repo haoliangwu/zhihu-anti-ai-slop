@@ -20,9 +20,10 @@ ZD.cloud = {
    * @param {object} settings
    * @param {{ruleScore:number, hits:Array<{id:string,name:string,deduct:number}>}} [ruleContext] 一审结果
    * @param {boolean} [force] 手动"重新判定"：跳过缓存直接调用（结果覆盖写回缓存）
+   * @param {string} [dimension] 预算维度 'answer' | 'article'（回答与文章预算隔离）
    * @returns {Promise<{score:number, aiSignals:string[], humanSignals:string[], cached?:boolean}|null>}
    */
-  async secondOpinion(text, tabId, settings, ruleContext, force) {
+  async secondOpinion(text, tabId, settings, ruleContext, force, dimension) {
     if (!settings.cloudEnabled || !settings.apiKey) return null;
     if (!text) return null;
 
@@ -45,8 +46,8 @@ ZD.cloud = {
       }
     }
 
-    // 2) 每页预算
-    const budget = await ZD.storage.getBudget(tabId);
+    // 2) 每页预算（按维度隔离：回答与文章各自独立的每页上限）
+    const budget = await ZD.storage.getBudget(tabId, dimension);
     if (budget.used >= settings.cloudPerPageLimit) return null;
 
     // 3) 并发上限（尽力而为；SW 重启后重置为 0，可接受）
@@ -55,7 +56,7 @@ ZD.cloud = {
     ZD.cloud.inFlight++;
     try {
       // 先记预算（无论成败都算一次调用，保护成本）
-      await ZD.storage.setBudget(tabId, { used: budget.used + 1, ts: Date.now() });
+      await ZD.storage.setBudget(tabId, dimension, { used: budget.used + 1, ts: Date.now() });
       const result = await callApi(text, settings, ruleContext);
       if (!result) return null;
       // 加权融合：final = w·cloud + (1−w)·rule（无一审时直接用 LLM 分）

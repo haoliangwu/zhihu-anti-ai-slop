@@ -30,6 +30,10 @@ Object.assign(globalThis.ZhihuDetector, {
     maxChars: 2000,         // 输入窗口字数上限
     minChars: 300,          // 判定字数下限：正文少于该字数直接跳过判定（0 关闭）
     windowMode: 'full',     // 'full' | 'head'（只看开头一两段）
+    /** 文章设置组（独立于回答；判定阈值/二审权重与回答共享，保证全站尺度一致） */
+    articleWindowMode: 'headtail', // 'headtail' | 'full' | 'head'；headtail = 头尾各半
+    articleMinChars: 300,   // 文章判定字数下限（0 关闭）
+    articleMaxChars: 4000,  // 文章输入窗口上限；headtail 模式 = 头尾各取一半（默认 2000+2000）
     cloudPerPageLimit: 20,  // 每页二审调用上限
     /** 二审权重（0-1）：最终分 = 二审分×权重 + 一审规则分×(1-权重)，
      *  LLM 打分波动大（实测 std≈26），加权融合可显著降噪 */

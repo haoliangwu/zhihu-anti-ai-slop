@@ -21,6 +21,10 @@
     'cloudPerPageLimit',
     'maxChars',
     'minChars',
+    // 文章设置组（独立于回答；阈值/权重共享）
+    'articleWindowMode',
+    'articleMinChars',
+    'articleMaxChars',
   ];
 
   let currentSettings = { ...ZD.DEFAULTS };

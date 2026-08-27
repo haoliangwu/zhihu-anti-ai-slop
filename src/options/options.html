@@ -115,6 +115,30 @@
     </section>
 
     <section class="card">
+      <h2>文章设置</h2>
+      <p class="hint">
+        文章详情页（<code>/p/xxx</code>）的判定参数，与回答判定独立；判定阈值与二审权重与回答共享（全站尺度一致）。
+        默认「头尾各半」：上限 4000 字、头尾各取 2000——万字长文也能覆盖结尾套话。
+      </p>
+      <label class="row">
+        <span>抽样方式</span>
+        <select id="articleWindowMode">
+          <option value="headtail">头尾各半（默认）</option>
+          <option value="full">全文（截断至上限）</option>
+          <option value="head">只看开头一两段</option>
+        </select>
+      </label>
+      <label class="row">
+        <span>正文字数上限（头尾各半时各取一半）</span>
+        <input type="number" id="articleMaxChars" min="200" max="20000" step="100" />
+      </label>
+      <label class="row">
+        <span>判定字数下限（文章少于该字数跳过判定，0 关闭）</span>
+        <input type="number" id="articleMinChars" min="0" max="5000" step="50" />
+      </label>
+    </section>
+
+    <section class="card">
       <h2>自定义 AI 痕迹规则</h2>
       <p class="hint">
         新增/编辑/删除自己的判定正则，与内置规则共同参与扣分（每次命中扣 weight 分，最多计入 cap 次）。
