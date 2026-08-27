@@ -220,9 +220,25 @@
     return card.querySelector(ZD.extract.BODY_SELECTOR);
   }
 
-  /** 移除卡片上的旧角标/面板/加载占位（重渲染前清理） */
+  /** 移除卡片上的角标/面板/加载占位（全量清理；"重新判定"等需要换 loading 的场景） */
   function clearCardUI(card) {
     card.querySelectorAll('.zys-badge, .zys-panel, .zys-rejudging').forEach((el) => el.remove());
+  }
+
+  /** 只清面板与加载占位（render 路径：角标节点原位复用，不删除重建，避免闪动） */
+  function clearPanels(card) {
+    card.querySelectorAll('.zys-panel, .zys-rejudging').forEach((el) => el.remove());
+  }
+
+  /** 取卡片现有角标节点，无则创建并插入；原位更新统一入口 */
+  function badgeOf(card) {
+    const existing = card.querySelector('.zys-badge');
+    if (existing) return existing;
+    const badge = document.createElement('div');
+    badge.className = 'zys-badge';
+    badge.setAttribute('tabindex', '0');
+    insertBeforeBody(card, badge);
+    return badge;
   }
 
   /** 把元素插到正文前；无正文时置于卡片顶部（badge/panel/loading 统一入口） */
@@ -238,16 +254,21 @@
     insertBeforeBody(card, panel);
   }
 
+  /** 已绑定过切换监听的面板角标（原位复用时只更新面板引用，不重复绑定） */
+  const boundBadges = new WeakSet();
+
   /** 绑定角标点击/回车切换面板 */
   function bindPanelToggle(badge, panel) {
-    const toggle = () => {
-      panel.hidden = !panel.hidden;
-    };
-    badge.addEventListener('click', toggle);
+    badge._zysPanel = panel; // 角标节点复用时指向最新面板
+    if (boundBadges.has(badge)) return;
+    boundBadges.add(badge);
+    badge.addEventListener('click', () => {
+      if (badge._zysPanel) badge._zysPanel.hidden = !badge._zysPanel.hidden;
+    });
     badge.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        toggle();
+        if (badge._zysPanel) badge._zysPanel.hidden = !badge._zysPanel.hidden;
       }
     });
   }
@@ -268,14 +289,17 @@
 
   /**
    * 二审进行中的轻量反馈角标：初次分析时规则初审已完成、云端二审尚未返回，
-   * 先渲染"二审中…"（小转圈），二审完成后 renderBadge 会先清理再替换为最终角标。
+   * 先渲染"二审中…"（小转圈），二审完成后原位更新为最终角标。
+   * 已有判定角标的卡片（正文变化重分析）不降级为"二审中"，保留旧结果直至新结果就绪。
    * 不可点击（无面板）；手动"重新判定"走独立的大 loading，不走到这里。
    */
   function renderPendingBadge(card, answerId) {
-    clearCardUI(card);
-    const badge = document.createElement('div');
+    if (card.querySelector('.zys-badge')) return;
+    clearPanels(card);
+    const badge = badgeOf(card);
     badge.className = 'zys-badge zys-pending';
     badge.dataset.zysAid = answerId || '';
+    badge.textContent = '';
     const spinner = document.createElement('span');
     spinner.className = 'zys-spinner zys-spinner-sm';
     const labelEl = document.createElement('span');
@@ -283,17 +307,18 @@
     labelEl.textContent = '二审中…';
     badge.appendChild(spinner);
     badge.appendChild(labelEl);
-    insertBeforeBody(card, badge);
   }
 
   /** 渲染"跳过"角标：回答本身字数少于 minChars，不判定。
    * 与"未命中"区分：跳过 = 太短不判；未命中 = 判了但没命中痕迹。
+   * 角标节点原位复用（跳过 ↔ 判定 双向切换不删除重建）。
    */
   function renderSkippedBadge(card, minChars) {
-    clearCardUI(card);
-    const badge = document.createElement('div');
+    clearPanels(card);
+    const badge = badgeOf(card);
     badge.className = 'zys-badge zys-level-skip';
-    badge.setAttribute('tabindex', '0');
+    badge.dataset.zysAid = badge.dataset.zysAid || '';
+    badge.textContent = '';
 
     const labelEl = document.createElement('span');
     labelEl.className = 'zys-level';
@@ -313,7 +338,7 @@
     p.textContent = `回答本身不足 ${minChars} 字，跳过 AI 判定。`;
     panel.appendChild(p);
     bindPanelToggle(badge, panel);
-    insertBadgePanel(card, badge, panel);
+    insertBeforeBody(card, panel);
   }
 
   function levelOfResult(result) {
@@ -326,13 +351,13 @@
   }
 
   function renderBadge(card, result) {
-    clearCardUI(card);
+    clearPanels(card); // 只清面板；角标节点原位更新（二审中→最终、跳过→判定，不闪动）
 
     const lv = levelOfResult(result);
-    const badge = document.createElement('div');
+    const badge = badgeOf(card);
     badge.className = `zys-badge ${LEVEL_CLASS[lv.level]}`;
     badge.dataset.zysAid = result.answerId || '';
-    badge.setAttribute('tabindex', '0');
+    badge.textContent = '';
 
     const scoreEl = document.createElement('span');
     scoreEl.className = 'zys-score';
@@ -438,7 +463,7 @@
     }
 
     bindPanelToggle(badge, panel);
-    insertBadgePanel(card, badge, panel);
+    insertBeforeBody(card, panel);
   }
 
   // ---------- 覆盖操作 ----------
@@ -533,13 +558,31 @@
 
   // ---------- 触发：初始 + 滚动 + 消息 ----------
 
+  /** 正文变化重分析防抖（按卡片）：知乎渐进渲染（分段补全/图片懒加载等）
+   *  会产生多次正文变更，合并为一次重分析，避免角标反复原位更新造成闪动。 */
+  const reanalyzeTimers = new Map();
+
+  function scheduleReanalyze(card) {
+    const timer = reanalyzeTimers.get(card);
+    if (timer) clearTimeout(timer);
+    reanalyzeTimers.set(
+      card,
+      setTimeout(() => {
+        reanalyzeTimers.delete(card);
+        state.analyzed.delete(card);
+        state.inFlight.delete(card);
+        analyzeCards([card]);
+      }, 700)
+    );
+  }
+
   function processAddedNodes(nodes) {
     const cards = [];
     const seen = new Set();
     for (const node of nodes) {
       if (!(node instanceof Element)) continue;
       // 正文区域变化（如首页"阅读全文"展开折叠预览 / 问题页折叠长文展开）：
-      // 该卡片已按摘要分析过 → 重置状态以便按全文重新分析
+      // 该卡片已按摘要分析过 → 文本真的变化时防抖后按全文重新分析
       if (node.closest(ZD.extract.BODY_SELECTOR)) {
         const card = node.closest(ZD.extract.CARD_SELECTOR);
         if (card && state.analyzed.has(card) && !seen.has(card)) {
@@ -547,13 +590,11 @@
           // 只有正文输入窗口文本真的变化（如折叠预览展开）才重分析。
           // 知乎会在 .RichContent 内追加操作栏/热评/Sticky 等 UI 节点，
           // 这类非正文变化若触发重分析，会把打开的理由面板重建为收起态、
-          // 角标闪动（clearCardUI 删除重建），表现为"弹窗自动消失"。
+          // 角标闪动，表现为"弹窗自动消失"。
           if (ZD.extract.extractText(card, state.settings) === state.cardText.get(card)) {
             continue;
           }
-          state.analyzed.delete(card);
-          state.inFlight.delete(card);
-          cards.push(card);
+          scheduleReanalyze(card);
           continue;
         }
       }
