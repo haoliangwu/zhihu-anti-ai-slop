@@ -19,6 +19,10 @@
     inFlight: new Map(),
     /** 手动"重新判定"的回答 ID 集合（二审强制绕过缓存） */
     forceRejudge: new Set(),
+    /** 卡片 → 最近一次分析时的正文输入窗口文本。
+     *  正文变化重分析的指纹：只有输入窗口文本真的变化才重分析，
+     *  避免知乎在 .RichContent 内追加操作栏/热评等 UI 节点触发无谓重分析。 */
+    cardText: new WeakMap(),
   };
 
   // ---------- 云端二审请求（内容侧队列：≤2 并发，其余排队，不丢弃） ----------
@@ -124,6 +128,7 @@
         };
         renderBadge(card, result);
         state.analyzed.add(card);
+        state.cardText.set(card, ZD.extract.extractText(card, state.settings));
         return;
       }
 
@@ -131,6 +136,7 @@
       const text = await extractStableText(card);
       if (!text) {
         state.analyzed.add(card);
+        state.cardText.set(card, '');
         return;
       }
 
@@ -138,6 +144,7 @@
       const minChars = state.settings.minChars || 0;
       if (minChars > 0 && ZD.extract.rawLength(card) < minChars) {
         state.analyzed.add(card);
+        state.cardText.set(card, text);
         renderSkippedBadge(card, minChars);
         return;
       }
@@ -176,6 +183,7 @@
 
       renderBadge(card, result);
       state.analyzed.add(card);
+      state.cardText.set(card, text);
     })();
     state.inFlight.set(card, p);
     try {
@@ -534,13 +542,18 @@
       // 该卡片已按摘要分析过 → 重置状态以便按全文重新分析
       if (node.closest(ZD.extract.BODY_SELECTOR)) {
         const card = node.closest(ZD.extract.CARD_SELECTOR);
-        if (card && state.analyzed.has(card)) {
+        if (card && state.analyzed.has(card) && !seen.has(card)) {
+          seen.add(card);
+          // 只有正文输入窗口文本真的变化（如折叠预览展开）才重分析。
+          // 知乎会在 .RichContent 内追加操作栏/热评/Sticky 等 UI 节点，
+          // 这类非正文变化若触发重分析，会把打开的理由面板重建为收起态、
+          // 角标闪动（clearCardUI 删除重建），表现为"弹窗自动消失"。
+          if (ZD.extract.extractText(card, state.settings) === state.cardText.get(card)) {
+            continue;
+          }
           state.analyzed.delete(card);
           state.inFlight.delete(card);
-          if (!seen.has(card)) {
-            seen.add(card);
-            cards.push(card);
-          }
+          cards.push(card);
           continue;
         }
       }

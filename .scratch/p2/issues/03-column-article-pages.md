@@ -11,3 +11,4 @@ Priority: backlog
 ## Comments
 
 - 参考 `.scratch/p2/spec.md` §3-02
+- 被 `.scratch/articles/` 新功能取代（文章详情页 + 列表卡片判定，含作者规则一致应用）。本票保持 backlog 状态不再推进，正文选择器结论（`.Post-RichText`）可作实现参考。
