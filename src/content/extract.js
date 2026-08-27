@@ -9,7 +9,7 @@ const ZD = globalThis.ZhihuDetector;
 
 ZD.extract = {
   /** 回答/文章列表卡片候选选择器（文章卡 .ContentItem.ArticleItem 与回答卡同构：
-   *  折叠摘要 RichContent + 阅读全文；纳入后 findAnswerCards 一并返回） */
+   *  折叠摘要 RichContent + 阅读全文；纳入后 findCards 一并返回） */
   CARD_SELECTOR: '.List-item, .Card.AnswerCard, .ContentItem.AnswerItem, .AnswerItem, .ContentItem.ArticleItem, .ArticleItem',
 
   /** 正文元素选择器（含折叠长文，无需展开请求） */
@@ -25,11 +25,11 @@ ZD.extract = {
   ARTICLE_TITLE_SELECTOR: 'h1.Post-Title',
 
   /**
-   * 在 root 内查找回答卡片，去重并过滤掉不含正文的容器。
+   * 在 root 内查找判定卡片（回答卡 + 文章列表卡），去重并过滤掉不含正文的容器。
    * @param {ParentNode} root
    * @returns {Element[]}
    */
-  findAnswerCards(root) {
+  findCards(root) {
     if (!root || !root.querySelectorAll) return [];
     const cards = [];
     const seen = new Set();
@@ -103,10 +103,13 @@ ZD.extract = {
 
   /**
    * 从文章卡片提取文章 ID：/p/<id> 链接（列表卡与详情页共用同一 ID 命名空间）。
+   * 优先卡片标题链接——列表卡常含多个 /p/ 链接（标题、阅读全文、相关推荐），
+   * 首链接未必是卡片自身。
    * @returns {string|null}
    */
   getArticleId(card) {
-    const link = card.querySelector('a[href*="/p/"]');
+    const titleLink = card.querySelector('.ContentItem-title a[href*="/p/"]');
+    const link = titleLink || card.querySelector('a[href*="/p/"]');
     if (link) {
       const m = link.getAttribute('href').match(/\/p\/(\d+)/);
       if (m) return m[1];
@@ -151,6 +154,12 @@ ZD.extract = {
     return ZD.extract.paragraphsOf(card.querySelector(ZD.extract.BODY_SELECTOR));
   },
 
+  /** 跳过与标题重复的首段（详情页/列表卡标题都可能重复出现在正文首段）。 */
+  dropTitleDup(paras, titleEl) {
+    if (paras.length && titleEl && paras[0] === titleEl.textContent.trim()) paras.shift();
+    return paras;
+  },
+
   /**
    * 提取文章正文段落：跳过首段标题（.Post-content 内嵌 H1 文章标题）。
    * @returns {string[]}
@@ -158,11 +167,7 @@ ZD.extract = {
   articleParagraphs(articleEl) {
     const bodyEl = articleEl.querySelector(ZD.extract.ARTICLE_BODY_SELECTOR);
     const paras = ZD.extract.paragraphsOf(bodyEl);
-    if (paras.length) {
-      const title = articleEl.querySelector(ZD.extract.ARTICLE_TITLE_SELECTOR);
-      if (title && paras[0] === title.textContent.trim()) paras.shift();
-    }
-    return paras;
+    return ZD.extract.dropTitleDup(paras, articleEl.querySelector(ZD.extract.ARTICLE_TITLE_SELECTOR));
   },
 
   /**
@@ -186,11 +191,7 @@ ZD.extract = {
    */
   articleListParagraphs(card) {
     const paras = ZD.extract.paragraphsOf(card.querySelector(ZD.extract.BODY_SELECTOR));
-    if (paras.length) {
-      const title = card.querySelector('.ContentItem-title');
-      if (title && paras[0] === title.textContent.trim()) paras.shift();
-    }
-    return paras;
+    return ZD.extract.dropTitleDup(paras, card.querySelector('.ContentItem-title'));
   },
 
   /** 文章列表卡本身字数（折叠摘要长度，未截断） */
@@ -211,8 +212,10 @@ ZD.extract = {
     if (mode === 'head') return paras.slice(0, 2).join('\n');
     const body = paras.join('\n');
     if (mode === 'headtail' && max > 0 && body.length > max) {
-      const half = Math.floor(max / 2);
-      return body.slice(0, half) + '\n……（中段省略）……\n' + body.slice(-half);
+      // 省略标记计入上限：头尾各取 (max−标记长)/2，总长 ≤ max（默认 4000）
+      const marker = '\n……（中段省略）……\n';
+      const half = Math.floor((max - marker.length) / 2);
+      return body.slice(0, half) + marker + body.slice(-half);
     }
     if (max > 0 && body.length > max) return body.slice(0, max);
     return body;

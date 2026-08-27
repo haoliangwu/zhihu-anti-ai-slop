@@ -27,12 +27,14 @@ ZD.cloud = {
     if (!settings.cloudEnabled || !settings.apiKey) return null;
     if (!text) return null;
 
-    // 1) 缓存命中（键 = 正文归一化哈希 + 一审结果摘要 + 融合权重：
-    //    正文/一审判定/权重变化 → 键变化 → 自动重判；force 时跳过）
+    // 1) 缓存命中（键 = 正文归一化哈希 + 一审结果摘要 + 融合权重 + 预算维度：
+    //    正文/一审判定/权重/维度变化 → 键变化 → 自动重判；force 时跳过。
+    //    维度入键保证回答与文章缓存互不污染（spec：详情页判定不得污染回答缓存）
     const contentHash = ZD.md5(
       text.replace(/\s+/g, ' ').trim() +
       '|first:' + firstPassSummary(ruleContext) +
-      '|w:' + (settings.cloudScoreWeight ?? 0.6)
+      '|w:' + (settings.cloudScoreWeight ?? 0.6) +
+      '|dim:' + (dimension || ZD.DIM.ANSWER)
     );
     if (!force) {
       const cache = await ZD.storage.getCache();

@@ -38,7 +38,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         hits: message.hits || [],
       };
       // 预算维度：文章判定与回答判定隔离（各自独立的每页上限）
-      const dimension = message.dimension === 'article' ? 'article' : 'answer';
+      const dimension = message.dimension === ZD.DIM.ARTICLE ? ZD.DIM.ARTICLE : ZD.DIM.ANSWER;
       const result = await ZD.cloud.secondOpinion(message.text, tabId, settings, ruleContext, !!message.force, dimension);
       if (!result) {
         sendResponse({ ok: false });

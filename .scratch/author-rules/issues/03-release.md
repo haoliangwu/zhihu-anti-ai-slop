@@ -29,6 +29,6 @@ Priority: P0
   - 首页时间线 12 卡全角标，折叠预览卡（无作者）不报错
   - console 无扩展报错（仅知乎页面自身 CORS/权限策略告警）
 - 回归中发现并修复竞态：规则变化时卡片处于二审在途（pending），旧管道完成后 render 会覆盖新规则 UI
-  （复现：屏蔽 LOMO 后其"79 二审中"卡在云返回后被清掉占位条）。修复：渲染时刻 authorRuleRenderGuard
+  （复现：屏蔽 LOMO 后其"79 二审中"卡在云返回后被清掉占位条）。修复：渲染时刻 applyAuthorRuleIfAny 守卫
   + reapply 同步重扫；复验：屏蔽 0.8s 内占位生效，云返回后保持占位
 - 文档：README 作者控制说明、CONTEXT.md 作者规则术语、ADR-0003；提交推送 main；zip 重建并校验 md5

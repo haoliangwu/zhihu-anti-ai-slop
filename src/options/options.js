@@ -311,13 +311,14 @@
 
   /**
    * 从输入解析作者 token（people 主键）。
-   * 接受：完整/协议相对主页链接、people/xxx 片段、或裸 token。
+   * 接受：完整/协议相对主页链接（zhihu.com 子串同时覆盖 www 与 zhuanlan 子域）、
+   * people/xxx 片段、或裸 token。
    * @returns {string|null} 非法格式返回 null
    */
   function parseAuthorInput(raw) {
     const s = (raw || '').trim();
     if (!s) return null;
-    const m = s.match(/(?:zhihu\.com|zhuanlan\.zhihu\.com)\/people\/([A-Za-z0-9_-]+)/);
+    const m = s.match(/zhihu\.com\/people\/([A-Za-z0-9_-]+)/);
     if (m) return m[1];
     const m2 = s.match(/people\/([A-Za-z0-9_-]+)/);
     if (m2) return m2[1];
@@ -331,8 +332,8 @@
     const empty = $('authorEmpty');
     list.textContent = '';
     const entries = [];
-    for (const [token, e] of Object.entries(rules.blocked || {})) entries.push({ token, kind: 'blocked', ...e });
-    for (const [token, e] of Object.entries(rules.trusted || {})) entries.push({ token, kind: 'trusted', ...e });
+    for (const [token, e] of Object.entries(rules[ZD.AUTHOR_KIND.BLOCKED] || {})) entries.push({ token, kind: ZD.AUTHOR_KIND.BLOCKED, ...e });
+    for (const [token, e] of Object.entries(rules[ZD.AUTHOR_KIND.TRUSTED] || {})) entries.push({ token, kind: ZD.AUTHOR_KIND.TRUSTED, ...e });
     entries.sort((a, b) => (b.ts || 0) - (a.ts || 0));
     empty.hidden = entries.length > 0;
     for (const en of entries) {
@@ -342,8 +343,8 @@
       const nameEl = document.createElement('b');
       nameEl.textContent = en.name || '（未知昵称）';
       const kindEl = document.createElement('span');
-      kindEl.className = 'author-kind ' + (en.kind === 'blocked' ? 'kind-blocked' : 'kind-trusted');
-      kindEl.textContent = en.kind === 'blocked' ? '屏蔽' : '信任';
+      kindEl.className = 'author-kind ' + (en.kind === ZD.AUTHOR_KIND.BLOCKED ? 'kind-blocked' : 'kind-trusted');
+      kindEl.textContent = en.kind === ZD.AUTHOR_KIND.BLOCKED ? '屏蔽' : '信任';
       const tokenEl = document.createElement('code');
       tokenEl.textContent = 'people/' + en.token;
       const whenEl = document.createElement('span');
@@ -380,7 +381,7 @@
     await ZD.storage.setAuthorRule(kind, token, '');
     $('authorUrl').value = '';
     await renderAuthorRules();
-    setStatus(`已${kind === 'blocked' ? '屏蔽' : '信任'}作者（页面即时生效）`, true);
+    setStatus(`已${kind === ZD.AUTHOR_KIND.BLOCKED ? '屏蔽' : '信任'}作者（页面即时生效）`, true);
   }
 
   // ---------- 二审缓存管理 ----------

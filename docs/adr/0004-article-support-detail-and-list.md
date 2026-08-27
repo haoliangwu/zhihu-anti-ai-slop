@@ -12,8 +12,8 @@ Status: accepted
 
 **Consequences**:
 
-- manifest content_scripts 增加 `https://*.zhihu.com/p/*`（www 与 zhuanlan.zhihu.com 同构 Post-* 布局；zhuanlan 权限由既有 `https://*.zhihu.com/*` 静态覆盖，动态授权机制为安全网，实测 contains=true 无需弹窗）。
+- manifest content_scripts 增加 `https://*.zhihu.com/p/*`（www 与 zhuanlan.zhihu.com 同构 Post-* 布局；zhuanlan 权限由既有 `https://*.zhihu.com/*` 静态覆盖，动态授权机制为安全网，实测 contains=true 无需弹窗——spec 所提「拒绝授权则跳过」分支在静态覆盖下不可达，属偏差记录，接受）。
 - 详情页正文选择器实测：`.Post-content` 是外层包装（含整篇），正文段落在 `.Post-RichTextContainer`；正文可能懒渲染（init 时未出现）→ 记录空指纹，观察器按文本指纹变化重试。
 - 文章列表卡 `.ContentItem.ArticleItem` 纳入卡片选择器（与回答卡共用 RichContent 折叠结构）；`analyzeCard` 按类型路由：'p'+文章 ID 覆盖命名空间、文章设置组、article 二审预算维度（键 = tab+dimension，与回答互不挤占每页上限）。
-- 观察器加祖先回退：正文晚于卡壳渲染的卡片（added node 在卡片内部、findAnswerCards 查不到祖先卡）也能被发现分析。
+- 观察器加祖先回退：正文晚于卡壳渲染的卡片（added node 在卡片内部、findCards 查不到祖先卡）也能被发现分析。
 - 作者规则一致应用：屏蔽文章作者 → 详情页/列表卡占位条；信任 → 灰色小签（折叠卡无作者信息时不参与，展开「阅读全文」渲染作者信息后自动适用）。

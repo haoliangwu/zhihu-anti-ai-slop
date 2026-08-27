@@ -15,7 +15,7 @@
     overrides: {},
     /** 作者规则 { blocked: {token:{name,ts}}, trusted: {token:{name,ts}} }
      *  硬规则：优先级 作者级 > 卡片覆盖 > 引擎判定 */
-    authorRules: { blocked: {}, trusted: {} },
+    authorRules: { [ZD.AUTHOR_KIND.BLOCKED]: {}, [ZD.AUTHOR_KIND.TRUSTED]: {} },
     /** 已分析卡片，避免 MutationObserver 重复触发 */
     analyzed: new WeakSet(),
     /** 进行中的分析，按卡片去重 */
@@ -52,7 +52,7 @@
             // 手动"重新判定"时强制绕过缓存重新调用
             force: !!force,
             // 预算维度：文章与回答隔离
-            dimension: dimension || 'answer',
+            dimension: dimension || ZD.DIM.ANSWER,
           },
           (resp) => {
             clearTimeout(timer);
@@ -215,13 +215,13 @@
       // 5) 云端二审：已配置 API 且（手动"重新判定"强制 或 分数落入模糊带）。
       //    经内容侧队列限流，不丢弃；携带一审结果作上下文。
       //    文章卡二审走 article 预算维度（与回答隔离）。
-      const force = state.forceRejudge.delete(overrideKey);
+      const forceRejudge = state.forceRejudge.delete(overrideKey);
       const cloudOn = state.settings.cloudEnabled && !!state.settings.apiKey;
-      if (overrideKey && cloudOn && (force || cloudEligible(rule.score, state.settings))) {
+      if (overrideKey && cloudOn && (forceRejudge || cloudEligible(rule.score, state.settings))) {
         // 初次分析：二审等待期先渲染"规则分 + 二审中"角标作为反馈
         // （手动"重新判定"已有独立大 loading，不重复渲染）
-        if (!force) renderPendingBadge(card, overrideKey, rule.score);
-        const cloud = await cloudQueue.request(text, rule, force, isArticle ? 'article' : 'answer');
+        if (!forceRejudge) renderPendingBadge(card, overrideKey, rule.score);
+        const cloud = await cloudQueue.request(text, rule, forceRejudge, isArticle ? ZD.DIM.ARTICLE : ZD.DIM.ANSWER);
         if (cloud) result = cloudResult(overrideKey, rule, cloud);
       }
 
@@ -321,7 +321,7 @@
     const cloudOn = state.settings.cloudEnabled && !!state.settings.apiKey;
     if (cloudOn && (forceRejudge || cloudEligible(rule.score, state.settings))) {
       if (!forceRejudge) renderPendingBadge(card, overrideKey, rule.score);
-      const cloud = await cloudQueue.request(text, rule, forceRejudge, 'article');
+      const cloud = await cloudQueue.request(text, rule, forceRejudge, ZD.DIM.ARTICLE);
       if (cloud) result = cloudResult(overrideKey, rule, cloud);
     }
 
@@ -332,7 +332,7 @@
   function cleanupArticleUI(card) {
     if (!card) return;
     clearCardUI(card);
-    clearRuleUI(card);
+    clearPanels(card);
   }
 
   /** 分批处理一组卡片，rAF 节流避免阻塞主线程 */
@@ -402,8 +402,8 @@
   /** 查询作者 token 命中的规则 */
   function authorRuleFor(token) {
     if (!token) return null;
-    if (state.authorRules.blocked[token]) return { kind: 'blocked', entry: state.authorRules.blocked[token] };
-    if (state.authorRules.trusted[token]) return { kind: 'trusted', entry: state.authorRules.trusted[token] };
+    if (state.authorRules[ZD.AUTHOR_KIND.BLOCKED][token]) return { kind: ZD.AUTHOR_KIND.BLOCKED, entry: state.authorRules[ZD.AUTHOR_KIND.BLOCKED][token] };
+    if (state.authorRules[ZD.AUTHOR_KIND.TRUSTED][token]) return { kind: ZD.AUTHOR_KIND.TRUSTED, entry: state.authorRules[ZD.AUTHOR_KIND.TRUSTED][token] };
     return null;
   }
 
@@ -419,7 +419,7 @@
       state.authorRules[rule.kind][author.token] = { ...entry, name: author.name };
       chrome.storage.local.set({ [ZD.KEYS.AUTHOR_RULES]: state.authorRules });
     }
-    if (rule.kind === 'blocked') renderBlockedBar(card, author, entry);
+    if (rule.kind === ZD.AUTHOR_KIND.BLOCKED) renderBlockedBar(card, author, entry);
     else renderTrustedChip(card, author, entry);
     state.analyzed.add(card);
     state.ruleApplied.add(card);
@@ -441,12 +441,6 @@
     return true;
   }
 
-  /** 移除作者规则 UI（占位条/信任小签/信任面板）并恢复卡片内容显示 */
-  function clearRuleUI(card) {
-    card.querySelectorAll('.zys-blocked, .zys-trusted, .zys-trusted-panel').forEach((el) => el.remove());
-    card.classList.remove('zys-rule-blocked', 'zys-viewing');
-  }
-
   /**
    * 屏蔽占位条：整卡被占位层覆盖（正文/操作区不可见、不可交互），
    * 仅显示「已屏蔽作者 X」+ [查看][取消屏蔽]。幂等：同一作者已有占位条
@@ -456,7 +450,7 @@
     const existing = card.querySelector('.zys-blocked');
     if (existing && existing.dataset.zysToken === author.token) return;
     clearCardUI(card);
-    clearRuleUI(card);
+    clearPanels(card);
     card.classList.add('zys-rule-blocked');
 
     const bar = document.createElement('div');
@@ -487,7 +481,7 @@
     const existing = card.querySelector('.zys-trusted');
     if (existing && existing.dataset.zysToken === author.token) return;
     clearCardUI(card);
-    clearRuleUI(card);
+    clearPanels(card);
 
     const chip = document.createElement('div');
     chip.className = 'zys-trusted';
@@ -798,8 +792,7 @@
     state.analyzed.delete(card);
     state.inFlight.delete(card);
     state.forceRejudge.add(answerId);
-    if (isArticleCard(card)) await analyzeArticle(true);
-    else await analyzeCard(card);
+    await rerunPipeline(card);
   }
 
   async function applyOverride(card, answerId, verdict) {
@@ -812,7 +805,7 @@
     };
     await ZD.storage.setOverride(answerId, override);
     state.overrides[answerId] = override;
-    await analyzeCard(card); // 重新渲染为覆盖状态
+    await rerunPipeline(card); // 重新渲染为覆盖状态
   }
 
   async function clearOverride(card, answerId) {
@@ -820,7 +813,14 @@
     await ZD.storage.removeOverride(answerId);
     delete state.overrides[answerId];
     state.analyzed.delete(card);
-    await analyzeCard(card); // 重新按引擎判定
+    await rerunPipeline(card); // 重新按引擎判定
+  }
+
+  /** 手动操作后的重跑分发：文章容器走文章管线（覆盖操作同样适用，
+   *  否则 .Post-Main 被当回答卡分析——取错 answerId / 误触发 hideAiBody） */
+  async function rerunPipeline(card) {
+    if (isArticleCard(card)) await analyzeArticle(true);
+    else await analyzeCard(card);
   }
 
   // 事件委托：按钮
@@ -858,7 +858,7 @@
       const card = cardOf(unblockBtn);
       const bar = unblockBtn.closest('.zys-blocked');
       const token = bar && bar.dataset.zysToken;
-      if (card && token) await ZD.storage.removeAuthorRule('blocked', token);
+      if (card && token) await ZD.storage.removeAuthorRule(ZD.AUTHOR_KIND.BLOCKED, token);
       return;
     }
 
@@ -870,8 +870,8 @@
       const chip = card && card.querySelector('.zys-trusted');
       const token = chip && chip.dataset.zysToken;
       if (card && token) {
-        if (chipBtn.dataset.zysUntrust) await ZD.storage.removeAuthorRule('trusted', token);
-        else await ZD.storage.setAuthorRule('blocked', token, chip.dataset.zysName);
+        if (chipBtn.dataset.zysUntrust) await ZD.storage.removeAuthorRule(ZD.AUTHOR_KIND.TRUSTED, token);
+        else await ZD.storage.setAuthorRule(ZD.AUTHOR_KIND.BLOCKED, token, chip.dataset.zysName);
       }
       return;
     }
@@ -887,7 +887,7 @@
     if (action === 'block-author' || action === 'trust-author') {
       const a = ZD.extract.getAuthor(card);
       if (a && !a.anonymous && a.token) {
-        const kind = action === 'block-author' ? 'blocked' : 'trusted';
+        const kind = action === 'block-author' ? ZD.AUTHOR_KIND.BLOCKED : ZD.AUTHOR_KIND.TRUSTED;
         await ZD.storage.setAuthorRule(kind, a.token, a.name);
       }
       return;
@@ -919,7 +919,7 @@
    *  不等旧分析管道——渲染时刻的 applyAuthorRuleIfAny 守卫保证旧管道完成后
    *  渲染的是规则 UI 而非被覆盖的旧判定）。 */
   function reapplyAuthorRules(tokens) {
-    for (const card of ZD.extract.findAnswerCards(document)) {
+    for (const card of ZD.extract.findCards(document)) {
       const author = ZD.extract.getAuthor(card);
       if (!author || author.anonymous || !author.token) continue;
       if (!tokens.has(author.token)) continue;
@@ -990,14 +990,14 @@
           continue;
         }
       }
-      for (const card of ZD.extract.findAnswerCards(node)) {
+      for (const card of ZD.extract.findCards(node)) {
         if (!state.analyzed.has(card) && !seen.has(card)) {
           seen.add(card);
           cards.push(card);
         }
       }
       // 新增节点在卡片内部（正文晚于卡壳渲染，如文章列表卡摘要后置）：
-      // findAnswerCards 只查后代、找不到祖先卡 → 向上回溯最近未分析的卡片
+      // findCards 只查后代、找不到祖先卡 → 向上回溯最近未分析的卡片
       const anc = node.closest(ZD.extract.CARD_SELECTOR);
       if (anc && !state.analyzed.has(anc) && !seen.has(anc) && anc.querySelector(ZD.extract.BODY_SELECTOR)) {
         seen.add(anc);
@@ -1008,7 +1008,7 @@
   }
 
   async function analyzeAll() {
-    const cards = ZD.extract.findAnswerCards(document).filter((c) => !state.analyzed.has(c));
+    const cards = ZD.extract.findCards(document).filter((c) => !state.analyzed.has(c));
     if (cards.length) await analyzeCards(cards);
   }
 
@@ -1039,7 +1039,7 @@
       state.overrides = newOv;
       // 只重渲染覆盖发生变化的回答卡片
       const changed = new Set([...Object.keys(oldOv), ...Object.keys(newOv)]);
-      ZD.extract.findAnswerCards(document).forEach((card) => {
+      ZD.extract.findCards(document).forEach((card) => {
         const badge = card.querySelector('.zys-badge');
         const aid = badge && badge.dataset.zysAid;
         if (aid && changed.has(aid)) analyzeCard(card);
@@ -1057,8 +1057,8 @@
       analyzeArticle(true); // 文章设置/阈值变化 → 文章重判
     }
     if (changes[ZD.KEYS.AUTHOR_RULES]) {
-      const oldRules = changes[ZD.KEYS.AUTHOR_RULES].oldValue || { blocked: {}, trusted: {} };
-      const newRules = changes[ZD.KEYS.AUTHOR_RULES].newValue || { blocked: {}, trusted: {} };
+      const oldRules = changes[ZD.KEYS.AUTHOR_RULES].oldValue || { [ZD.AUTHOR_KIND.BLOCKED]: {}, [ZD.AUTHOR_KIND.TRUSTED]: {} };
+      const newRules = changes[ZD.KEYS.AUTHOR_RULES].newValue || { [ZD.AUTHOR_KIND.BLOCKED]: {}, [ZD.AUTHOR_KIND.TRUSTED]: {} };
       state.authorRules = newRules;
       // 只重扫规则发生变化的作者（含跨页：选项页操作同样实时生效）
       const changed = new Set([

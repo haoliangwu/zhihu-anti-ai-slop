@@ -10,7 +10,7 @@ const { KEYS, DEFAULTS } = ZD;
 
 /** 二审预算键：tab + 维度（answer/article 隔离，互不挤占） */
 function budgetKey(tabId, dim) {
-  return String(tabId) + ':' + (dim || 'answer');
+  return String(tabId) + ':' + (dim || ZD.DIM.ANSWER);
 }
 
 ZD.storage = {
@@ -50,14 +50,14 @@ ZD.storage = {
   /** 读取作者规则 { blocked: {token:{name,ts}}, trusted: {token:{name,ts}} } */
   async getAuthorRules() {
     const raw = await chrome.storage.local.get(KEYS.AUTHOR_RULES);
-    return raw[KEYS.AUTHOR_RULES] || { blocked: {}, trusted: {} };
+    return raw[KEYS.AUTHOR_RULES] || { [ZD.AUTHOR_KIND.BLOCKED]: {}, [ZD.AUTHOR_KIND.TRUSTED]: {} };
   },
 
-  /** 写入单条作者规则（kind: 'blocked' | 'trusted'）。
+  /** 写入单条作者规则（kind: ZD.AUTHOR_KIND.*）。
    *  同一 token 在另一列表自动移除，保证两列表互斥（作者级规则唯一语义）。 */
   async setAuthorRule(kind, token, name) {
     const rules = await ZD.storage.getAuthorRules();
-    const other = kind === 'blocked' ? 'trusted' : 'blocked';
+    const other = kind === ZD.AUTHOR_KIND.BLOCKED ? ZD.AUTHOR_KIND.TRUSTED : ZD.AUTHOR_KIND.BLOCKED;
     if (rules[other]) delete rules[other][token];
     rules[kind][token] = { name: name || '', ts: Date.now() };
     await chrome.storage.local.set({ [KEYS.AUTHOR_RULES]: rules });

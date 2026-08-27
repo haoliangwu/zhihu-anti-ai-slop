@@ -61,6 +61,12 @@ Object.assign(globalThis.ZhihuDetector, {
   /** 判定等级（角标样式与文案的键） */
   LEVEL: { CONFIRM_AI: 'confirm-ai', SUSPECT_AI: 'suspect-ai', NORMAL: 'normal', SKIP: 'skip' },
 
+  /** 二审预算/缓存维度（回答与文章隔离，互不挤占每页上限） */
+  DIM: { ANSWER: 'answer', ARTICLE: 'article' },
+
+  /** 作者规则方向（屏蔽/信任，两列表互斥；存储键即这些字符串） */
+  AUTHOR_KIND: { BLOCKED: 'blocked', TRUSTED: 'trusted' },
+
   /** 二审并发上限：内容侧发送队列与 SW 侧执行共用同一上限 */
   CLOUD_MAX_CONCURRENT: 2,
 
