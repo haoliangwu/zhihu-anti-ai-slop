@@ -14,8 +14,10 @@ node_modules/
 dist/
 
 # 校准打分评估：C-ReD 原始数据与派生中间文件（第三方数据集，不入库）
+#   ** 递归匹配所有子目录：pilot/ 等子目录的生成数据同样不入库（防数据误提交）
 .scratch/calibrated-scoring/eval/data/
-.scratch/calibrated-scoring/eval/*.jsonl
+.scratch/calibrated-scoring/eval/**/*.jsonl
+.scratch/calibrated-scoring/eval/pilot/questions.json
 
 # 第三方参考仓库（本地克隆，不入库）
 stop-slop-zh/
