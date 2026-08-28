@@ -196,13 +196,22 @@
 
 .zys-hits li {
   padding: 1px 8px;
-  background: rgba(230, 67, 64, 0.05);
-  border: 1px solid rgba(230, 67, 64, 0.18);
   border-radius: 4px;
-  color: #e64340;
   font-size: 12px;
   line-height: 20px;
   white-space: nowrap;
+}
+/* 校准模式按贡献符号着色：负 = 偏向 AI（红）、正 = 偏向人类（绿）。
+   回退扣分制 / 自定义正则扣分无 contribution 字段，按负面红色显示（扣分语义）。 */
+.zys-hits li.zys-contrib-neg {
+  background: rgba(230, 67, 64, 0.05);
+  border: 1px solid rgba(230, 67, 64, 0.18);
+  color: #e64340;
+}
+.zys-hits li.zys-contrib-pos {
+  background: rgba(10, 143, 78, 0.06);
+  border: 1px solid rgba(10, 143, 78, 0.2);
+  color: #0a8f4e;
 }
 
 .zys-empty {

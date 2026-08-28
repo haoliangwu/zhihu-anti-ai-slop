@@ -712,6 +712,13 @@
       result.hits.forEach((h) => {
         const li = document.createElement('li');
         li.textContent = hitText(h);
+        // 校准模式按贡献符号着色（正=偏人类绿、负=偏 AI 红）；
+        // 回退扣分制 / 自定义规则扣分（negative contribution）统一按负面红色。
+        if (h.contribution !== undefined) {
+          li.classList.add(h.contribution >= 0 ? 'zys-contrib-pos' : 'zys-contrib-neg');
+        } else {
+          li.classList.add('zys-contrib-neg');
+        }
         list.appendChild(li);
       });
       panel.appendChild(list);
