@@ -17,7 +17,10 @@ dist/
 #   ** 递归匹配所有子目录：pilot/ 等子目录的生成数据同样不入库（防数据误提交）
 .scratch/calibrated-scoring/eval/data/
 .scratch/calibrated-scoring/eval/**/*.jsonl
+# 生成任务清单（问题标题派生 + 长度桶），与生成数据同惯例不入库
 .scratch/calibrated-scoring/eval/pilot/questions.json
+.scratch/calibrated-scoring/eval/pilot/questions-full.json
+.scratch/calibrated-scoring/eval/pilot/buckets.json
 
 # 第三方参考仓库（本地克隆，不入库）
 stop-slop-zh/

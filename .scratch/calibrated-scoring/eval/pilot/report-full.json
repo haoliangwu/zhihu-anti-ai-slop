@@ -1,0 +1,340 @@
+{
+  "data": "C-ReD Q&A + v4-flash 全量（A2）",
+  "generated": "2026-08-28T09:03:08.100Z",
+  "n": {
+    "oldRows": 29071,
+    "flash": 2956,
+    "flashTrain": 2217,
+    "flashTest": 739,
+    "humanAll": 2956,
+    "humanTrain": 2365,
+    "oldAiTrain": 20892
+  },
+  "seed": {
+    "split": 20260828,
+    "flashSplit": 20260829,
+    "balancedPick": 42
+  },
+  "thetaSweep": [
+    0.1,
+    0.2,
+    0.3,
+    0.5,
+    0.75,
+    1
+  ],
+  "oldEval": {
+    "旧域测试集(oldTest)": {
+      "n": 5814,
+      "accuracy": 0.6186790505675954,
+      "auroc": 0.8154735351544466,
+      "brier": 0.19158315581704094
+    },
+    "真实混合AI面(旧AI+flash)": {
+      "n": 6553,
+      "accuracy": 0.5611170456279566,
+      "auroc": 0.7631787843028407,
+      "brier": 0.23049943678648746
+    },
+    "v4-flash 留出25%": {
+      "n": 739,
+      "accuracy": 0.10825439783491204,
+      "auroc": null,
+      "brier": 0.5366689328032181
+    },
+    "人类全部召回": {
+      "n": 2956,
+      "accuracy": 0.8880243572395129,
+      "auroc": null,
+      "brier": 0.14772442752908577
+    },
+    "旧AI全部(全量判别)": {
+      "n": 26115,
+      "accuracy": 0.599310740953475,
+      "auroc": null,
+      "brier": 0.1922693236770401
+    }
+  },
+  "strategies": {
+    "theta_0.1": {
+      "masses": {
+        "human": 2365,
+        "flash": 237,
+        "oldAi": 2129
+      },
+      "ev": {
+        "旧域测试集(oldTest)": {
+          "n": 5814,
+          "accuracy": 0.6226350189198486,
+          "auroc": 0.8013611537929495,
+          "brier": 0.1915198699517304
+        },
+        "真实混合AI面(旧AI+flash)": {
+          "n": 6553,
+          "accuracy": 0.601403937128033,
+          "auroc": 0.790425515007342,
+          "brier": 0.20157266564608348
+        },
+        "v4-flash 留出25%": {
+          "n": 739,
+          "accuracy": 0.43437077131258456,
+          "auroc": null,
+          "brier": 0.28066191350397796
+        },
+        "人类全部召回": {
+          "n": 2956,
+          "accuracy": 0.861299052774019,
+          "auroc": null,
+          "brier": 0.16040157444989162
+        },
+        "旧AI全部(全量判别)": {
+          "n": 26115,
+          "accuracy": 0.6060884549109707,
+          "auroc": null,
+          "brier": 0.1903834684256203
+        }
+      },
+      "gate": {
+        "oldDomainNotWorse": false,
+        "mixedAiNotWorse": true,
+        "flashImproved": true,
+        "humanRecallOk": true,
+        "pass": false
+      }
+    },
+    "theta_0.2": {
+      "masses": {
+        "human": 2365,
+        "flash": 473,
+        "oldAi": 1892
+      },
+      "ev": {
+        "旧域测试集(oldTest)": {
+          "n": 5814,
+          "accuracy": 0.6233230134158927,
+          "auroc": 0.7947095901798403,
+          "brier": 0.19583306631831462
+        },
+        "真实混合AI面(旧AI+flash)": {
+          "n": 6553,
+          "accuracy": 0.6163589195788188,
+          "auroc": 0.7896864859280803,
+          "brier": 0.19948443621036016
+        },
+        "v4-flash 留出25%": {
+          "n": 739,
+          "accuracy": 0.5615696887686062,
+          "auroc": null,
+          "brier": 0.2282111812067916
+        },
+        "人类全部召回": {
+          "n": 2956,
+          "accuracy": 0.8494587280108254,
+          "auroc": null,
+          "brier": 0.16496606970514346
+        },
+        "旧AI全部(全量判别)": {
+          "n": 26115,
+          "accuracy": 0.6084242772353053,
+          "auroc": null,
+          "brier": 0.1944415407866147
+        }
+      },
+      "gate": {
+        "oldDomainNotWorse": false,
+        "mixedAiNotWorse": true,
+        "flashImproved": true,
+        "humanRecallOk": true,
+        "pass": false
+      }
+    },
+    "theta_0.3": {
+      "masses": {
+        "human": 2365,
+        "flash": 710,
+        "oldAi": 1656
+      },
+      "ev": {
+        "旧域测试集(oldTest)": {
+          "n": 5814,
+          "accuracy": 0.6064671482628139,
+          "auroc": 0.7875565352130837,
+          "brier": 0.20124747994904485
+        },
+        "真实混合AI面(旧AI+flash)": {
+          "n": 6553,
+          "accuracy": 0.6023195482984892,
+          "auroc": 0.7853465348220626,
+          "brier": 0.20190240358704833
+        },
+        "v4-flash 留出25%": {
+          "n": 739,
+          "accuracy": 0.5696887686062246,
+          "auroc": null,
+          "brier": 0.20705494219509202
+        },
+        "人类全部召回": {
+          "n": 2956,
+          "accuracy": 0.8640054127198917,
+          "auroc": null,
+          "brier": 0.1665118397741387
+        },
+        "旧AI全部(全量判别)": {
+          "n": 26115,
+          "accuracy": 0.5895079456251197,
+          "auroc": null,
+          "brier": 0.20007002881061078
+        }
+      },
+      "gate": {
+        "oldDomainNotWorse": false,
+        "mixedAiNotWorse": true,
+        "flashImproved": true,
+        "humanRecallOk": true,
+        "pass": false
+      }
+    },
+    "theta_0.5": {
+      "masses": {
+        "human": 2365,
+        "flash": 1183,
+        "oldAi": 1183
+      },
+      "ev": {
+        "旧域测试集(oldTest)": {
+          "n": 5814,
+          "accuracy": 0.58703130374957,
+          "auroc": 0.7547383319840365,
+          "brier": 0.21607429179361118
+        },
+        "真实混合AI面(旧AI+flash)": {
+          "n": 6553,
+          "accuracy": 0.585380741645048,
+          "auroc": 0.7608827991833218,
+          "brier": 0.21308304990494198
+        },
+        "v4-flash 留出25%": {
+          "n": 739,
+          "accuracy": 0.5723951285520974,
+          "auroc": null,
+          "brier": 0.18954978828015542
+        },
+        "人类全部召回": {
+          "n": 2956,
+          "accuracy": 0.874830852503383,
+          "auroc": null,
+          "brier": 0.16494080127224653
+        },
+        "旧AI全部(全量判别)": {
+          "n": 26115,
+          "accuracy": 0.5651541259812368,
+          "auroc": null,
+          "brier": 0.21624468993237145
+        }
+      },
+      "gate": {
+        "oldDomainNotWorse": false,
+        "mixedAiNotWorse": true,
+        "flashImproved": true,
+        "humanRecallOk": true,
+        "pass": false
+      }
+    },
+    "theta_0.75": {
+      "masses": {
+        "human": 2365,
+        "flash": 1774,
+        "oldAi": 591
+      },
+      "ev": {
+        "旧域测试集(oldTest)": {
+          "n": 5814,
+          "accuracy": 0.5576195390436877,
+          "auroc": 0.7263849568144025,
+          "brier": 0.25018367480834697
+        },
+        "真实混合AI面(旧AI+flash)": {
+          "n": 6553,
+          "accuracy": 0.5631008698306119,
+          "auroc": 0.7374109631728528,
+          "brier": 0.24266188006520384
+        },
+        "v4-flash 留出25%": {
+          "n": 739,
+          "accuracy": 0.6062246278755075,
+          "auroc": null,
+          "brier": 0.18348499963674497
+        },
+        "人类全部召回": {
+          "n": 2956,
+          "accuracy": 0.868064952638701,
+          "auroc": null,
+          "brier": 0.15680572954625507
+        },
+        "旧AI全部(全量判别)": {
+          "n": 26115,
+          "accuracy": 0.5348650201033889,
+          "auroc": null,
+          "brier": 0.2543275583985946
+        }
+      },
+      "gate": {
+        "oldDomainNotWorse": false,
+        "mixedAiNotWorse": false,
+        "flashImproved": true,
+        "humanRecallOk": true,
+        "pass": false
+      }
+    },
+    "theta_1": {
+      "masses": {
+        "human": 2365,
+        "flash": 2365,
+        "oldAi": 0
+      },
+      "ev": {
+        "旧域测试集(oldTest)": {
+          "n": 5814,
+          "accuracy": 0.2776057791537668,
+          "auroc": 0.6010085548334468,
+          "brier": 0.3770861482843971
+        },
+        "真实混合AI面(旧AI+flash)": {
+          "n": 6553,
+          "accuracy": 0.31573325194567375,
+          "auroc": 0.6288670604749426,
+          "brier": 0.35606673949234624
+        },
+        "v4-flash 留出25%": {
+          "n": 739,
+          "accuracy": 0.6156968876860622,
+          "auroc": null,
+          "brier": 0.19069888737192398
+        },
+        "人类全部召回": {
+          "n": 2956,
+          "accuracy": 0.8974966170500677,
+          "auroc": null,
+          "brier": 0.13893124507785673
+        },
+        "旧AI全部(全量判别)": {
+          "n": 26115,
+          "accuracy": 0.21872487076392877,
+          "auroc": null,
+          "brier": 0.3971688617090758
+        }
+      },
+      "gate": {
+        "oldDomainNotWorse": false,
+        "mixedAiNotWorse": false,
+        "flashImproved": true,
+        "humanRecallOk": true,
+        "pass": false
+      }
+    }
+  },
+  "bestTheta": null,
+  "flips": [],
+  "weightsNew": null,
+  "note": "多策略 θ 扫描（加权平衡）；best 通过闸门者；未 --bake 不写生产权重"
+}

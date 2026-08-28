@@ -1,11 +1,16 @@
 #!/usr/bin/env node
 /**
- * A1 试点：用 deepseek-v4-flash 对 300 个知乎问题生成回答
- *  - 问题源：eval/pilot/questions.json（C-ReD human CSV 唯一问题标题随机 300）
- *  - 风格：4 种轮换（直接回答 / 口语知乎腔 / 专业分析 / 经历叙述）——贴近真实 v4-flash 输出分布（B1）
- *  - API：官方 https://api.deepseek.com/v1，模型 deepseek-v4-flash，key 从环境变量 DEEPSEEK_API_KEY 读取（不落盘）
- *  - 并发 4 + 失败重试 3 次（指数退避）+ 断点续跑（answers.jsonl 已完成的 qid 跳过）
- * 输出：eval/pilot/answers.jsonl  { qid, question, style, model, text }
+ * 用 deepseek-v4-flash 对知乎问题生成回答（A1 pilot 300 + A2 全量 2956 共用）
+ *  - 任务源：questions-full.json（2956 = pilot 300 原序 + 新增唯一标题 + 二刷补齐）
+ *            不存在时回退 questions.json（pilot 300）
+ *  - 长度分层：buckets.json（可选）按人类长度分布 short 12% / mid 25% / long 63%，
+ *              prompt 目标字数随桶走（100-200 / 200-400 / 400-700），避免"长文本=AI"长度伪信号
+ *  - 风格：4 种轮换（direct / colloquial / professional / story）——贴近真实 v4-flash 输出分布
+ *  - API：官方 https://api.deepseek.com/v1，模型 deepseek-v4-flash，
+ *         key 从环境变量 DEEPSEEK_API_KEY 读取（不落盘、不进库）
+ *  - 并发 argv[2]（默认 4）+ 失败重试 3 次（指数退避）+ 断点续跑（answers.jsonl 已有 qid 跳过，
+ *    pilot 300 条原样保留，qid 与 questions-full.json 前 300 一致）
+ * 输出：answers.jsonl  { qid, question, style, model, text }（追加写入）
  * 用法：DEEPSEEK_API_KEY=sk-... node generate.js [并发数]
  */
 'use strict';
@@ -24,7 +29,18 @@ const MODEL = 'deepseek-v4-flash';
 const CONCURRENCY = Number(process.argv[2]) || 4;
 const MAX_ATTEMPTS = 3;
 
-const QUESTIONS = JSON.parse(fs.readFileSync(path.join(__dirname, 'questions.json'), 'utf8'));
+// 全量任务清单优先；pilot 场景回退 questions.json
+const TASK_FILE = fs.existsSync(path.join(__dirname, 'questions-full.json'))
+  ? 'questions-full.json'
+  : 'questions.json';
+const QUESTIONS = JSON.parse(fs.readFileSync(path.join(__dirname, TASK_FILE), 'utf8'));
+
+// 长度分层桶（可选）：桶序与 qid 对齐
+const BUCKETS = fs.existsSync(path.join(__dirname, 'buckets.json'))
+  ? JSON.parse(fs.readFileSync(path.join(__dirname, 'buckets.json'), 'utf8'))
+  : null;
+const BUCKET_TARGET = { short: '100-200 字', mid: '200-400 字', long: '400-700 字' };
+
 const OUT = path.join(__dirname, 'answers.jsonl');
 
 const STYLES = [
@@ -50,7 +66,7 @@ const STYLES = [
   },
 ];
 
-// 断点续跑：读已完成的 qid
+// 断点续跑：读已完成的 qid（pilot 300 条原样跳过）
 const done = new Set();
 if (fs.existsSync(OUT)) {
   for (const line of fs.readFileSync(OUT, 'utf8').trim().split('\n').filter(Boolean)) {
@@ -60,7 +76,7 @@ if (fs.existsSync(OUT)) {
   }
 }
 
-async function callOne(question, style) {
+async function callOne(question, style, target) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 90000);
   try {
@@ -73,7 +89,7 @@ async function callOne(question, style) {
           { role: 'system', content: style.system },
           {
             role: 'user',
-            content: `问题：${question}\n\n请用 100-500 字回答。只输出回答正文，不要任何其他内容。`,
+            content: `问题：${question}\n\n请用${target}回答。只输出回答正文，不要任何其他内容。`,
           },
         ],
         // 关闭思考模式（v4-flash 默认思考，thinking 会吃光 max_tokens 导致 content 为空）；
@@ -98,10 +114,21 @@ async function callOne(question, style) {
 }
 
 async function main() {
-  const tasks = QUESTIONS.map((q, i) => ({ qid: i, question: q, style: STYLES[i % STYLES.length] })).filter(
-    (t) => !done.has(t.qid)
+  const tasks = QUESTIONS.map((q, i) => ({
+    qid: i,
+    question: q,
+    style: STYLES[i % STYLES.length],
+    target: BUCKETS ? BUCKET_TARGET[BUCKETS[i]] || '100-500 字' : '100-500 字',
+  })).filter((t) => !done.has(t.qid));
+  const bucketCount = BUCKETS
+    ? { short: tasks.filter((t) => t.target === BUCKET_TARGET.short).length,
+        mid: tasks.filter((t) => t.target === BUCKET_TARGET.mid).length,
+        long: tasks.filter((t) => t.target === BUCKET_TARGET.long).length }
+    : null;
+  console.log(
+    `taskFile=${TASK_FILE} total=${QUESTIONS.length} done=${done.size} remaining=${tasks.length} concurrency=${CONCURRENCY} model=${MODEL}` +
+      (bucketCount ? ` buckets=${JSON.stringify(bucketCount)}` : '')
   );
-  console.log(`total=${QUESTIONS.length} done=${done.size} remaining=${tasks.length} concurrency=${CONCURRENCY} model=${MODEL}`);
   if (tasks.length === 0) {
     console.log('全部已完成，无剩余任务');
     return;
@@ -118,7 +145,7 @@ async function main() {
       let text = null;
       for (let a = 0; a < MAX_ATTEMPTS && !text; a++) {
         try {
-          text = await callOne(t.question, t.style);
+          text = await callOne(t.question, t.style, t.target);
         } catch (e) {
           console.error(`qid=${t.qid} 尝试${a + 1}/3 失败: ${e.message}`);
           if (a < MAX_ATTEMPTS - 1) await new Promise((r) => setTimeout(r, 1500 * (a + 1)));
@@ -130,7 +157,7 @@ async function main() {
       } else {
         fail++;
       }
-      if ((ok + fail) % 20 === 0) console.log(`progress: ok=${ok} fail=${fail} (${ok + fail}/${tasks.length})`);
+      if ((ok + fail) % 50 === 0) console.log(`progress: ok=${ok} fail=${fail} (${ok + fail}/${tasks.length})`);
     }
   }
 
