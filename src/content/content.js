@@ -123,6 +123,7 @@
     return {
       source: 'cloud',
       score: cloud.score,
+      ruleScore: rule.score, // 一审规则分（角标显示"一审(融合)"，如 50(67)）
       hits: rule.hits,
       cloud: { aiSignals: cloud.aiSignals || [], humanSignals: cloud.humanSignals || [] },
       answerId: overrideKey,
@@ -549,10 +550,13 @@
     });
   }
 
-  /** 角标分数文案：覆盖显示 人/AI，其余显示分数 */
+  /** 角标分数文案：覆盖显示 人/AI；二审显示"一审分(融合分)"如 50(67)；其余显示分数 */
   function badgeScoreText(result) {
-    if (result.source !== 'override') return String(result.score);
-    return result.verdict === ZD.VERDICT.AI ? 'AI' : '人';
+    if (result.source === 'override') return result.verdict === ZD.VERDICT.AI ? 'AI' : '人';
+    if (result.source === 'cloud' && typeof result.ruleScore === 'number') {
+      return `${result.ruleScore}(${result.score})`;
+    }
+    return String(result.score);
   }
 
   /** 角标 meta 文案：已覆盖 / 二审 / N 条痕迹 / 未命中 */

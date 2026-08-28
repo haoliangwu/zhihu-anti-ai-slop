@@ -117,8 +117,23 @@ ZD.extract = {
     return null;
   },
 
-  /** 真实正文块元素：跳过内嵌卡片/图片占位(noscript)/元数据，只取正文 */
-  BODY_BLOCK_SELECTOR: 'p, li, blockquote, h1, h2, h3, h4, h5, h6, pre',
+  /** 真实正文块元素：跳过内嵌卡片/图片占位(noscript)/元数据，只取正文。 */
+  BODY_BLOCK_SELECTOR: 'p, li, blockquote, h1, h2, h3, h4, h5, h6',
+
+  /** 非散文内容（代码/技术/嵌入物）：不参与任何写作特征计数。
+   *  块级 pre 不在 BODY_BLOCK_SELECTOR 中（整体跳过）；行内 code 等从
+   *  段落文本中剔除。理由：代码/配置不是写作痕迹，引号、冒号、编号等
+   *  特征若在代码上线性计数会外推爆分（如 JSON 配置的英文引号 → 判 0 分）。
+   *  注意：只按标签/知乎专用类匹配，勿用泛化的 [class*="..."] 猜测——
+   *  知乎的划词高亮 .highlight-wrap 包裹的仍是作者正文（曾误伤）。 */
+  NON_PROSE_SELECTOR: 'pre, code, kbd, samp, tt, math, .ztext-math, figure, figcaption, video, audio, iframe, embed, object, canvas, template, .ztext-video',
+
+  /** 提取单块的散文文本：克隆后剔除代码/嵌入内容，避免其文本参与特征计数 */
+  proseTextOf(el) {
+    const clone = el.cloneNode(true);
+    clone.querySelectorAll(ZD.extract.NON_PROSE_SELECTOR).forEach((n) => n.remove());
+    return clone.textContent.trim();
+  },
 
   /**
    * 提取正文段落（共用实现：块级正文元素优先，兜底整段切分）。
@@ -130,11 +145,15 @@ ZD.extract = {
   paragraphsOf(bodyEl) {
     if (!bodyEl) return [];
     let paras = Array.from(bodyEl.querySelectorAll(ZD.extract.BODY_BLOCK_SELECTOR))
-      .map((el) => el.textContent.trim())
+      // 代码/嵌入容器内的块级元素（如 pre 里的 li）一并跳过
+      .filter((el) => !el.closest(ZD.extract.NON_PROSE_SELECTOR))
+      .map((el) => ZD.extract.proseTextOf(el))
       .filter(Boolean);
     if (paras.length === 0) {
-      // 兜底：无块级正文时退回整段文本（按换行切分）
-      paras = bodyEl.textContent
+      // 兜底：无块级正文时退回整段文本（按换行切分），同样剔除代码/嵌入内容
+      const clone = bodyEl.cloneNode(true);
+      clone.querySelectorAll(ZD.extract.NON_PROSE_SELECTOR).forEach((n) => n.remove());
+      paras = clone.textContent
         .split(/\n+/)
         .map((s) => s.trim())
         .filter(Boolean);
