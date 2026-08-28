@@ -46,9 +46,13 @@
           {
             type: ZD.MSG.SECOND_OPINION,
             text,
-            // 一审结果作为上下文传给二审
+            // 一审结果作为上下文传给二审（校准模式 = 带符号贡献，回退 = 扣分）
             ruleScore: rule.score,
-            hits: rule.hits.map((h) => ({ id: h.id, name: h.name, deduct: h.deduct })),
+            hits: rule.hits.map((h) => ({
+              id: h.id,
+              name: h.name,
+              deduct: h.contribution !== undefined ? h.contribution : -h.deduct,
+            })),
             // 手动"重新判定"时强制绕过缓存重新调用
             force: !!force,
             // 预算维度：文章与回答隔离
@@ -559,6 +563,16 @@
     return count > 0 ? `${count} 条痕迹` : '未命中';
   }
 
+  /** 命中清单文案：校准模式 = 带符号贡献（正=偏人类），回退模式 = 扣分 */
+  function hitText(h) {
+    if (h.contribution !== undefined) {
+      const v = h.contribution;
+      const sign = v >= 0 ? '+' : '';
+      return `${h.name} ×${h.count}：${sign}${Number.isInteger(v) ? v : v.toFixed(2)}`;
+    }
+    return `${h.name} -${h.deduct} 分`;
+  }
+
   /**
    * 二审进行中的反馈角标：初次分析时规则初审已完成、云端二审尚未返回，
    * 直接显示规则一审分数 + "二审中"标签（灰调），二审完成后原位更新为
@@ -697,10 +711,17 @@
       list.className = 'zys-hits';
       result.hits.forEach((h) => {
         const li = document.createElement('li');
-        li.textContent = `${h.name} -${h.deduct} 分`;
+        li.textContent = hitText(h);
         list.appendChild(li);
       });
       panel.appendChild(list);
+      // 校准模式：解释带符号贡献的语义（正=偏人类；自定义规则扣分为分数尺度）
+      if (result.hits[0].contribution !== undefined) {
+        const note = document.createElement('p');
+        note.className = 'zys-empty';
+        note.textContent = '特征贡献：正 = 偏向人类，负 = 偏向 AI；分数 = 校准概率 × 100';
+        panel.appendChild(note);
+      }
     } else if (result.source !== 'override') {
       const p = document.createElement('p');
       p.className = 'zys-empty';

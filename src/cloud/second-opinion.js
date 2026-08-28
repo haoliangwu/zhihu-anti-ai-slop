@@ -117,7 +117,9 @@ async function callApi(text, settings, ruleContext) {
       : null;
     if (!content) return null;
 
-    const parsed = JSON.parse(content);
+    // 部分模型会返回 markdown 代码围栏包裹的 JSON（```json ... ```），剥离后再解析
+    const cleaned = content.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+    const parsed = JSON.parse(cleaned);
     let score = Number(parsed.score);
     if (!Number.isFinite(score)) return null;
     score = ZD.clampScore(score); // 钳制到 0–100
@@ -170,17 +172,21 @@ function buildSystemMessage(settings, ruleContext) {
   return template + '\n\n' + ctx;
 }
 
-/** 一审（规则引擎）上下文文本：规则分 + 命中痕迹清单 */
+/** 一审（规则引擎）上下文文本：规则分 + 命中特征贡献清单（校准模式为带符号 logit 贡献） */
 function buildFirstPassContext(ruleContext) {
   if (!ruleContext || typeof ruleContext.ruleScore !== 'number') return '';
   const parts = [];
   parts.push(`规则分（人类置信度）：${ruleContext.ruleScore} / 100`);
   const hits = ruleContext.hits || [];
   if (hits.length) {
-    parts.push('命中的 AI 创作痕迹：');
-    hits.forEach((h) => parts.push(`- ${h.name} -${h.deduct} 分`));
+    parts.push('命中的特征贡献（正 = 偏向人类，负 = 偏向 AI）：');
+    hits.forEach((h) => {
+      const v = Number(h.deduct);
+      const sign = v >= 0 ? '+' : '';
+      parts.push(`- ${h.name} ${sign}${v.toFixed(2)}`);
+    });
   } else {
-    parts.push('未命中任何 AI 创作痕迹。');
+    parts.push('未命中任何特征。');
   }
   return parts.join('\n');
 }

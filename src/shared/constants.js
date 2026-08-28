@@ -19,10 +19,14 @@ Object.assign(globalThis.ZhihuDetector, {
 
   /** 默认配置（选项页可覆盖，存 chrome.storage.local[KEYS.SETTINGS]） */
   DEFAULTS: {
-    thresholdConfirm: 40,   // ≤ 此值 → 确定 AI
-    thresholdSuspect: 70,   // ≤ 此值 → 疑似 AI
-    fuzzyLow: 20,           // 二审模糊带下界
-    fuzzyHigh: 80,          // 二审模糊带上界
+    /** 阈值默认值随校准打分模型（票 02）数据落地：
+     *  确定 ≤30（人类误报 3.7%）、疑似 ≤50（Youden J，AI 检出 60%/误报 11%），
+     *  模糊带 [30,50] = 疑似区（云端只处理真正模糊的区间，控制调用成本）。
+     *  旧默认 40/70/[20,80] 适配的是加性扣分尺度，与校准分数分布不兼容。 */
+    thresholdConfirm: 30,   // ≤ 此值 → 确定 AI
+    thresholdSuspect: 50,   // ≤ 此值 → 疑似 AI
+    fuzzyLow: 30,           // 二审模糊带下界（= 确定阈值，云端从疑似区起介入）
+    fuzzyHigh: 50,          // 二审模糊带上界（= 疑似阈值）
     apiBaseUrl: 'https://api.deepseek.com/v1',
     apiKey: '',
     apiModel: 'deepseek-v4-flash',

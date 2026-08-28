@@ -26,6 +26,7 @@
         "src/shared/constants.js",
         "src/shared/storage.js",
         "src/engine/traces.js",
+        "src/engine/calibrated-weights.js",
         "src/engine/rules.js",
         "src/content/extract.js",
         "src/content/content.js"

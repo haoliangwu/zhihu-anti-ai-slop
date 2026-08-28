@@ -14,11 +14,30 @@ function budgetKey(tabId, dim) {
 }
 
 ZD.storage = {
-  /** 读取设置，未保存项取默认值 */
+  /**
+   * 读取设置，未保存项取默认值。
+   * 校准引擎迁移（票 02）：无 settingsVersion 的旧存档其阈值默认值（40/70/[20,80]）
+   * 与校准分数尺度不兼容；仅当存储值仍是旧默认（用户未自定义过阈值）时，
+   * 自动升级为数据阈值（30/50/[30,50]）并写入 settingsVersion: 2。
+   */
   async getSettings() {
     const raw = await chrome.storage.local.get(KEYS.SETTINGS);
     const saved = raw[KEYS.SETTINGS] || {};
-    return { ...DEFAULTS, ...saved };
+    const settings = { ...DEFAULTS, ...saved };
+    if (saved.settingsVersion === undefined) {
+      // 旧默认阈值：仅当存储值全部仍是旧默认（或未设置）才迁移，尊重用户自定义
+      const PREV = { thresholdConfirm: 40, thresholdSuspect: 70, fuzzyLow: 20, fuzzyHigh: 80 };
+      const untouched = Object.entries(PREV).every(([k, v]) => saved[k] === undefined || saved[k] === v);
+      if (untouched) {
+        settings.thresholdConfirm = DEFAULTS.thresholdConfirm;
+        settings.thresholdSuspect = DEFAULTS.thresholdSuspect;
+        settings.fuzzyLow = DEFAULTS.fuzzyLow;
+        settings.fuzzyHigh = DEFAULTS.fuzzyHigh;
+      }
+      settings.settingsVersion = 2;
+      await chrome.storage.local.set({ [KEYS.SETTINGS]: settings });
+    }
+    return settings;
   },
 
   /** 保存设置（完整替换） */

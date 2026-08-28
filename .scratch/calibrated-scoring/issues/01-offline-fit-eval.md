@@ -32,6 +32,6 @@ Priority: P1
 - **留出集（n=5814，人类 591）**：基线 AUROC 0.676 / Brier 0.687；**平衡模型 AUROC 0.816 / Brier 0.192 / Acc 0.619**；全量模型 AUROC 0.815 / Brier 0.079 / Acc 0.902
 - **平衡评估子集（与部署语义一致）**：平衡模型 AUROC 0.824 / Brier 0.166 / Acc 0.750；全量模型 Brier 0.329 失真 → **交付平衡模型**（先验中性，分数 = 人类置信度，符合 ADR-0001）
 - **门槛：通过**（AUROC 且 Brier 均优于基线）→ 02 放行
-- **鲁棒性（`eval/robustness.js`，5 种子）**：AUROC 稳定 0.782–0.792；16/21 特征符号稳定；5 个不稳定（元评论/励志结尾/成语堆砌/死隐喻）均为基率≈0、|w|≤0.09 噪声特征
+- **鲁棒性（`eval/robustness.js`，5 种子）**：AUROC 稳定 0.782–0.792；17/21 特征符号稳定；4 个不稳定（元评论/励志结尾/成语堆砌/死隐喻）均为基率≈0、|w|≤0.09 噪声特征
 - **关键发现（供 02 决策）**：`colon-overuse`（冒号）、`period-as-comma`（句号当顿号）、`fake-colloquial`、`fake-intimacy` 等在本域被拟合为**人类信号**且符号跨种子稳定——C-ReD Q&A 域人类知乎 KOL 比提示词约束的 LLM 更常使用这些模式；旧引擎「冒号滥用扣 3 分」属域偏差。详见 `eval/README.md`
 - 复现：`python3 convert.py && node features.js && node fit.js && node robustness.js`
