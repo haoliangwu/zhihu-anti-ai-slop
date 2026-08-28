@@ -36,7 +36,7 @@ Object.assign(globalThis.ZhihuDetector, {
     windowMode: 'full',     // 'full' | 'head'（只看开头一两段）
     /** 文章设置组（独立于回答；判定阈值/二审权重与回答共享，保证全站尺度一致） */
     articleWindowMode: 'headtail', // 'headtail' | 'full' | 'head'；headtail = 头尾各半
-    articleMinChars: 300,   // 文章判定字数下限（0 关闭）
+    articleMinChars: 800,   // 文章判定字数下限（0 关闭）：折叠摘要常 <800 字，跳过判定更合理
     articleMaxChars: 4000,  // 文章输入窗口上限；headtail 模式 = 头尾各取一半（默认 2000+2000）
     cloudPerPageLimit: 20,  // 每页二审调用上限
     /** 二审权重（0-1）：最终分 = 二审分×权重 + 一审规则分×(1-权重)，

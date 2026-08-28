@@ -611,10 +611,6 @@
   function appendAuthorActions(actions, card) {
     const author = ZD.extract.getAuthor(card);
     if (!author || author.anonymous || !author.token) return false;
-    const sep = document.createElement('span');
-    sep.className = 'zys-actions-sep';
-    sep.textContent = '作者';
-    actions.appendChild(sep);
     actions.appendChild(actionButton('屏蔽该作者', 'block-author'));
     actions.appendChild(actionButton('信任该作者', 'trust-author'));
     return true;

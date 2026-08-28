@@ -16,16 +16,20 @@ function budgetKey(tabId, dim) {
 ZD.storage = {
   /**
    * 读取设置，未保存项取默认值。
-   * 校准引擎迁移（票 02）：无 settingsVersion 的旧存档其阈值默认值（40/70/[20,80]）
-   * 与校准分数尺度不兼容；仅当存储值仍是旧默认（用户未自定义过阈值）时，
-   * 自动升级为数据阈值（30/50/[30,50]）并写入 settingsVersion: 2。
+   * 版本化迁移（settingsVersion）：
+   *  v2（校准引擎）：旧阈值默认值（40/70/[20,80]）与校准分数尺度不兼容；
+   *    仅当存储值仍是旧默认（用户未自定义过阈值）时自动升级为 30/50/[30,50]。
+   *  v3（文章跳过字数）：旧默认 300 → 800（折叠摘要常 <800 字），仅当仍是旧默认时升级。
+   *  原则：只迁移未被用户自定义过的字段，尊重显式配置。
    */
   async getSettings() {
     const raw = await chrome.storage.local.get(KEYS.SETTINGS);
     const saved = raw[KEYS.SETTINGS] || {};
     const settings = { ...DEFAULTS, ...saved };
-    if (saved.settingsVersion === undefined) {
-      // 旧默认阈值：仅当存储值全部仍是旧默认（或未设置）才迁移，尊重用户自定义
+    const version = saved.settingsVersion === undefined ? 0 : saved.settingsVersion;
+    let migrated = false;
+    if (version < 2) {
+      // v2：旧默认阈值（仅当存储值全部仍是旧默认才迁移，尊重用户自定义）
       const PREV = { thresholdConfirm: 40, thresholdSuspect: 70, fuzzyLow: 20, fuzzyHigh: 80 };
       const untouched = Object.entries(PREV).every(([k, v]) => saved[k] === undefined || saved[k] === v);
       if (untouched) {
@@ -34,7 +38,15 @@ ZD.storage = {
         settings.fuzzyLow = DEFAULTS.fuzzyLow;
         settings.fuzzyHigh = DEFAULTS.fuzzyHigh;
       }
-      settings.settingsVersion = 2;
+      migrated = true;
+    }
+    if (version < 3) {
+      // v3：文章跳过字数旧默认 300 → 800（仅当仍是旧默认才迁移）
+      if (saved.articleMinChars === 300) settings.articleMinChars = DEFAULTS.articleMinChars;
+      migrated = true;
+    }
+    if (migrated) {
+      settings.settingsVersion = 3;
       await chrome.storage.local.set({ [KEYS.SETTINGS]: settings });
     }
     return settings;
