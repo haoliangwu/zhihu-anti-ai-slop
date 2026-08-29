@@ -30,7 +30,7 @@
      *  避免知乎在 .RichContent 内追加操作栏/热评等 UI 节点触发无谓重分析。 */
     cardText: new WeakMap(),
     /** 文章详情页状态（同一时刻至多一篇；SPA 导航时按 pathname 重建） */
-    article: { id: null, card: null, analyzed: false, text: '' },
+    article: { id: null, card: null, analyzed: false, text: '', inFlight: null },
     /** 上次见到的 pathname（文章页 SPA 导航检测） */
     lastPath: location.pathname,
   };
@@ -278,11 +278,27 @@
     const card = document.querySelector(ZD.extract.ARTICLE_CARD_SELECTOR);
     if (!card) return; // 404 / 未渲染：无角标不报错
 
-    // 幂等：同一篇文章同一容器已分析则跳过（SPA 渐进渲染期间的重复触发）
-    if (!force && state.article.analyzed && state.article.id === articleId && state.article.card === card) return;
-    state.article.id = articleId;
-    state.article.card = card;
-    state.article.analyzed = false;
+    // in-flight 去重：文章管线无并发保护时，MutationObserver 在"重新判定中"
+    // 再次触发 analyzeArticle 会开第二条无 force 管道——它消费不到 forceRejudge，
+    // 会以一审结果 renderBadge 立即清掉 loading，而 force 管道的二审请求仍在
+    // SW 侧飞行（表象 = 加载动画马上终止，但 sw.js 请求还在加载）。
+    // 普通触发复用现有管道；手动"重新判定"（force）等当前管道收尾后再重跑。
+    if (state.article.inFlight) {
+      if (!force) return state.article.inFlight;
+      try {
+        await state.article.inFlight;
+      } catch {
+        // 旧管道内部自行吞错，此处只需等待其 UI 收尾
+      }
+      return analyzeArticle(true);
+    }
+
+    const p = (async () => {
+      // 幂等：同一篇文章同一容器已分析则跳过（SPA 渐进渲染期间的重复触发）
+      if (!force && state.article.analyzed && state.article.id === articleId && state.article.card === card) return;
+      state.article.id = articleId;
+      state.article.card = card;
+      state.article.analyzed = false;
 
     // 0) 作者规则（复用回答卡组件；占位条/信任小签同样作用于文章容器）
     if (applyAuthorRuleIfAny(card)) {
@@ -331,7 +347,15 @@
     }
 
     renderBadge(card, result);
-    state.article.analyzed = true;
+      state.article.analyzed = true;
+    })();
+    state.article.inFlight = p;
+    try {
+      await p;
+    } finally {
+      // 只有仍持有该管道时才清空（新 force 管道接管后由它自己管理）
+      if (state.article.inFlight === p) state.article.inFlight = null;
+    }
   }
   /** 清理文章规则 UI（离开文章页时调用） */
   function cleanupArticleUI(card) {
@@ -994,7 +1018,7 @@
       }
     } else if (state.article.analyzed && state.article.card) {
       cleanupArticleUI(state.article.card);
-      state.article = { id: null, card: null, analyzed: false };
+      state.article = { id: null, card: null, analyzed: false, text: '', inFlight: null };
     }
 
     const cards = [];
