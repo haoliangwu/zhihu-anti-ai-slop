@@ -22,6 +22,9 @@ ZD.storage = {
    *  v3（文章跳过字数）：旧默认 300 → 800（折叠摘要常 <800 字），仅当仍是旧默认时升级。
    *  v4（票 07 防误报）：模糊带下界 30 → 15（确定区左段可能含校准误报，
    *    下探后送二审挽救）；仅当 fuzzyLow/fuzzyHigh 仍是旧默认 30/50 时迁移。
+   *  v5（票 10 v4 统计特征）：模糊带 15–50 → 10–55（v4 权重压低部分人类长文，
+   *    下界 15→10 救回无挽救误判；上界 50→55 救回 flash 漏判）；仅当仍是
+   *    v4 默认 15/50 时迁移。
    *  原则：只迁移未被用户自定义过的字段，尊重显式配置。
    */
   async getSettings() {
@@ -52,11 +55,20 @@ ZD.storage = {
       //   入带即送二审挽救）。判「仍是旧默认」用迁移后的 settings 值——
       //   覆盖 v0 旧默认（20/80）经 v2 迁移到 30/50 后再下探的级联场景；
       //   用户自定义过 fuzzyLow/fuzzyHigh 任一则不迁移。
-      if (settings.fuzzyLow === 30 && settings.fuzzyHigh === 50) settings.fuzzyLow = DEFAULTS.fuzzyLow;
+      if (settings.fuzzyLow === 30 && settings.fuzzyHigh === 50) settings.fuzzyLow = 15;
+      migrated = true;
+    }
+    if (version < 5) {
+      // v5：模糊带 15–50 → 10–55（票 10 v4 统计特征：下界救回人类无挽救误判，
+      //   上界救回 flash 漏判）。仅当仍是 v4 默认 15/50 才迁移，尊重自定义。
+      if (settings.fuzzyLow === 15 && settings.fuzzyHigh === 50) {
+        settings.fuzzyLow = DEFAULTS.fuzzyLow;
+        settings.fuzzyHigh = DEFAULTS.fuzzyHigh;
+      }
       migrated = true;
     }
     if (migrated) {
-      settings.settingsVersion = 4;
+      settings.settingsVersion = 5;
       await chrome.storage.local.set({ [KEYS.SETTINGS]: settings });
     }
     return settings;

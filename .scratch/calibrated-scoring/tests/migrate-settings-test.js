@@ -1,5 +1,5 @@
 'use strict';
-// 迁移单测：模拟 6 种存储态，验证 v4 迁移（fuzzyLow 30→15）只动"仍是旧默认"的配置
+// 迁移单测：模拟存储态，验证 v5 迁移（模糊带 15-50 → 10-55）只动"仍是旧默认"的配置
 // 运行：node .scratch/calibrated-scoring/tests/migrate-settings-test.js
 const fs = require('fs');
 const path = require('path');
@@ -37,17 +37,19 @@ async function run(name, saved) {
   await run('v0 legacy defaults', { thresholdConfirm: 40, thresholdSuspect: 70, fuzzyLow: 20, fuzzyHigh: 80 });
   await run('v2 default state', { settingsVersion: 2, thresholdConfirm: 30, thresholdSuspect: 50, fuzzyLow: 30, fuzzyHigh: 50 });
   await run('v3 default state', { settingsVersion: 3, thresholdConfirm: 30, thresholdSuspect: 50, fuzzyLow: 30, fuzzyHigh: 50, articleMinChars: 800 });
-  await run('custom fuzzyLow=25', { settingsVersion: 3, thresholdConfirm: 30, thresholdSuspect: 50, fuzzyLow: 25, fuzzyHigh: 50 });
-  await run('custom fuzzyHigh=40', { settingsVersion: 3, thresholdConfirm: 30, thresholdSuspect: 50, fuzzyLow: 30, fuzzyHigh: 40 });
+  await run('v4 default state', { settingsVersion: 4, thresholdConfirm: 30, thresholdSuspect: 50, fuzzyLow: 15, fuzzyHigh: 50, articleMinChars: 800 });
+  await run('custom fuzzyLow=25', { settingsVersion: 4, thresholdConfirm: 30, thresholdSuspect: 50, fuzzyLow: 25, fuzzyHigh: 50 });
+  await run('custom fuzzyHigh=40', { settingsVersion: 4, thresholdConfirm: 30, thresholdSuspect: 50, fuzzyLow: 15, fuzzyHigh: 40 });
   await run('fresh install', undefined);
   // 断言
   const cases = [
-    ['v0 legacy defaults', (s) => s.fuzzyLow === 15 && s.fuzzyHigh === 50 && s.thresholdConfirm === 30],
-    ['v2 default state', (s) => s.fuzzyLow === 15],
-    ['v3 default state', (s) => s.fuzzyLow === 15],
-    ['custom fuzzyLow=25', (s) => s.fuzzyLow === 25],          // 自定义不迁移
-    ['custom fuzzyHigh=40', (s) => s.fuzzyLow === 30 && s.fuzzyHigh === 40], // 自定义不迁移
-    ['fresh install', (s) => s.fuzzyLow === 15],
+    ['v0 legacy defaults', (s) => s.fuzzyLow === 10 && s.fuzzyHigh === 55 && s.thresholdConfirm === 30],
+    ['v2 default state', (s) => s.fuzzyLow === 10 && s.fuzzyHigh === 55],
+    ['v3 default state', (s) => s.fuzzyLow === 10 && s.fuzzyHigh === 55],
+    ['v4 default state', (s) => s.fuzzyLow === 10 && s.fuzzyHigh === 55],   // v4 默认 15/50 → v5 迁移到 10/55
+    ['custom fuzzyLow=25', (s) => s.fuzzyLow === 25 && s.fuzzyHigh === 50], // 自定义不迁移
+    ['custom fuzzyHigh=40', (s) => s.fuzzyLow === 15 && s.fuzzyHigh === 40], // 自定义不迁移
+    ['fresh install', (s) => s.fuzzyLow === 10 && s.fuzzyHigh === 55],
   ];
   const redo = [];
   for (const [name, fn] of cases) {
@@ -55,8 +57,9 @@ async function run(name, saved) {
       'v0 legacy defaults': { thresholdConfirm: 40, thresholdSuspect: 70, fuzzyLow: 20, fuzzyHigh: 80 },
       'v2 default state': { settingsVersion: 2, thresholdConfirm: 30, thresholdSuspect: 50, fuzzyLow: 30, fuzzyHigh: 50 },
       'v3 default state': { settingsVersion: 3, thresholdConfirm: 30, thresholdSuspect: 50, fuzzyLow: 30, fuzzyHigh: 50, articleMinChars: 800 },
-      'custom fuzzyLow=25': { settingsVersion: 3, thresholdConfirm: 30, thresholdSuspect: 50, fuzzyLow: 25, fuzzyHigh: 50 },
-      'custom fuzzyHigh=40': { settingsVersion: 3, thresholdConfirm: 30, thresholdSuspect: 50, fuzzyLow: 30, fuzzyHigh: 40 },
+      'v4 default state': { settingsVersion: 4, thresholdConfirm: 30, thresholdSuspect: 50, fuzzyLow: 15, fuzzyHigh: 50, articleMinChars: 800 },
+      'custom fuzzyLow=25': { settingsVersion: 4, thresholdConfirm: 30, thresholdSuspect: 50, fuzzyLow: 25, fuzzyHigh: 50 },
+      'custom fuzzyHigh=40': { settingsVersion: 4, thresholdConfirm: 30, thresholdSuspect: 50, fuzzyLow: 15, fuzzyHigh: 40 },
       'fresh install': undefined,
     }[name];
     store.settings = saved;
@@ -64,5 +67,5 @@ async function run(name, saved) {
     if (!fn(s)) redo.push(name + ' → ' + JSON.stringify(s));
   }
   if (redo.length) { console.log('\nFAIL:', redo.join('\n')); process.exit(1); }
-  console.log('\nALL 6 CASES PASS');
+  console.log('\nALL 7 CASES PASS');
 })();

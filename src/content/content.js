@@ -572,6 +572,8 @@
     if (h.contribution !== undefined) {
       const v = h.contribution;
       const sign = v >= 0 ? '+' : '';
+      // 统计特征（票 10）：连续值无命中次数，显示数值；词法特征显示 ×次数
+      if (h.value !== undefined) return `${h.name} ${h.value}：${sign}${v.toFixed(2)}`;
       return `${h.name} ×${h.count}：${sign}${Number.isInteger(v) ? v : v.toFixed(2)}`;
     }
     return `${h.name} -${h.deduct} 分`;
