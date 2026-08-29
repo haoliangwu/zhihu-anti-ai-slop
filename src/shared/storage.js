@@ -20,6 +20,8 @@ ZD.storage = {
    *  v2（校准引擎）：旧阈值默认值（40/70/[20,80]）与校准分数尺度不兼容；
    *    仅当存储值仍是旧默认（用户未自定义过阈值）时自动升级为 30/50/[30,50]。
    *  v3（文章跳过字数）：旧默认 300 → 800（折叠摘要常 <800 字），仅当仍是旧默认时升级。
+   *  v4（票 07 防误报）：模糊带下界 30 → 15（确定区左段可能含校准误报，
+   *    下探后送二审挽救）；仅当 fuzzyLow/fuzzyHigh 仍是旧默认 30/50 时迁移。
    *  原则：只迁移未被用户自定义过的字段，尊重显式配置。
    */
   async getSettings() {
@@ -45,8 +47,16 @@ ZD.storage = {
       if (saved.articleMinChars === 300) settings.articleMinChars = DEFAULTS.articleMinChars;
       migrated = true;
     }
+    if (version < 4) {
+      // v4：模糊带下界 30 → 15（票 07 防误报：确定区左段可能含校准误报，
+      //   入带即送二审挽救）。判「仍是旧默认」用迁移后的 settings 值——
+      //   覆盖 v0 旧默认（20/80）经 v2 迁移到 30/50 后再下探的级联场景；
+      //   用户自定义过 fuzzyLow/fuzzyHigh 任一则不迁移。
+      if (settings.fuzzyLow === 30 && settings.fuzzyHigh === 50) settings.fuzzyLow = DEFAULTS.fuzzyLow;
+      migrated = true;
+    }
     if (migrated) {
-      settings.settingsVersion = 3;
+      settings.settingsVersion = 4;
       await chrome.storage.local.set({ [KEYS.SETTINGS]: settings });
     }
     return settings;

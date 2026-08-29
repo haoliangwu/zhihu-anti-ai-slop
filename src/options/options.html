@@ -34,6 +34,8 @@
       <p class="hint">
         规则初审分数落在模糊带内时，将回答正文发送至你配置的 LLM 服务（默认 DeepSeek）复核。
         未配置 API Key 时仅使用本地规则。
+        模糊带默认下限 15、上限 50：下限低于确定阈值 30——确定区左段（15–29 分）
+        可能是校准误报（实测 26 分手写回答），入带也送云端复核挽救；低于 15 分证据充分不再外发。
       </p>
       <label class="row check">
         <input type="checkbox" id="cloudEnabled" />
