@@ -135,6 +135,15 @@ ZD.extract = {
     return clone.textContent.trim();
   },
 
+  /** 剔除段尾孤悬全角冒号（冒号后紧跟换行或文末，如「prompt 如下：」+ 图片被剔除后的残渣）。
+   *  issue 11：图文穿插排版的手写回答，图片/嵌入内容被 NON_PROSE_SELECTOR 剔除后文字流
+   *  只剩一串指向图片的段尾冒号——不是写作痕迹，不参与任何特征计数（词法 colon-overuse
+   *  与统计 punctDensity 同源豁免）。与训练语料的段尾孤悬定义（`：` 后接 \n 或文末）一致。
+   *  @param {string} text */
+  stripDanglingColons(text) {
+    return text.replace(/：+(?=\n|$)/g, '');
+  },
+
   /**
    * 提取正文段落（共用实现：块级正文元素优先，兜底整段切分）。
    * 知乎正文以 <p> 为主；NOSCRIPT 里的图片标记文本、内嵌卡片动态数字
@@ -158,6 +167,8 @@ ZD.extract = {
         .map((s) => s.trim())
         .filter(Boolean);
     }
+    // 剔除段尾孤悬冒号（图片/嵌入内容被剔除后的残渣，issue 11）：两条路径统一处理
+    paras = paras.map((s) => ZD.extract.stripDanglingColons(s)).filter(Boolean);
     // 跳过开头的图片占位/来源行
     while (paras.length && /^(\[图片\]|图片|图\d|via|来自|图片来源)/.test(paras[0])) paras.shift();
     // 跳过开头的引用段落（以引号起始的整段）

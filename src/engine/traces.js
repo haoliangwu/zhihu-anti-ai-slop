@@ -25,7 +25,9 @@ ZD.traces = [
     test(t) {
       let n = 0;
       const hasFirst = /(首先|第一，)/.test(t);
-      const hasMid = /(其次|第二，)/.test(t);
+      // 仅句首连接词义：前接句末标点/换行/文首。issue 11 C：排除「价格其次」「第二名」
+      // 等名词/排名义（全文本匹配会把人类测评类回答的并列陈述误当枚举骨架）。
+      const hasMid = /(^|[。！？!?\n；;])\s*(其次|第二，)/.test(t);
       if (hasFirst) n++;
       if (hasMid) n++;
       // 强收尾词独立计分
