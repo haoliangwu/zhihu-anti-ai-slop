@@ -177,7 +177,7 @@
       const overrideKey = isArticle && rawId ? articleOverrideKey(rawId) : rawId;
 
       // 0) 作者级硬规则（优先级最高，先于卡片覆盖与引擎判定）：
-      //    屏蔽 → 整卡占位；信任 → 零判定小签。均不产生任何提取与判定调用。
+      //    屏蔽 → 正文收起 + 占位条；信任 → 零判定小签。均不产生任何提取与判定调用。
       if (applyAuthorRuleIfAny(card)) return;
 
       // 1) 覆盖优先（无需等待文本稳定，立即渲染）
@@ -400,6 +400,7 @@
    *  作者规则 UI 是独立元素，正常判定渲染前必须移除并恢复卡片内容显示） */
   function clearPanels(card) {
     card.querySelectorAll('.zys-panel, .zys-rejudging, .zys-blocked, .zys-trusted, .zys-trusted-panel').forEach((el) => el.remove());
+    card.querySelectorAll('[data-zys-collapsed]').forEach((el) => el.removeAttribute('data-zys-collapsed'));
     card.classList.remove('zys-rule-blocked', 'zys-viewing');
   }
 
@@ -471,16 +472,35 @@
   }
 
   /**
-   * 屏蔽占位条：整卡被占位层覆盖（正文/操作区不可见、不可交互），
-   * 仅显示「已屏蔽作者 X」+ [查看][取消屏蔽]。幂等：同一作者已有占位条
-   * （含 [查看] 展开态）则保留现状，避免重分析/规则重扫打断查看。
+   * 收起屏蔽卡的正文块：打 data-zys-collapsed 标记 → CSS display:none，
+   * 卡片只留头部/操作栏骨架 + 占位条，不再整卡遮罩占位（省空间）。
+   * 回答卡收起整个 .RichContent（含「阅读全文」折叠控件），文章容器收起正文容器。
+   * 幂等；[查看] 展开态（.zys-viewing）由 CSS 门控，重复调用不打断展开。
+   */
+  function collapseBlockedBody(card) {
+    const body = bodyOf(card) || card.querySelector(ZD.extract.ARTICLE_BODY_SELECTOR);
+    if (!body) return;
+    const wrapper = body.closest('.RichContent') || body;
+    wrapper.dataset.zysCollapsed = '1';
+  }
+
+  /**
+   * 屏蔽占位条：紧凑条插在正文原本的位置（头部下方），正文被收起、
+   * 卡片收缩，仅显示「已屏蔽作者 X」+ [查看][取消屏蔽]。
+   * 幂等：同一作者已有占位条（含 [查看] 展开态）则保留现状，
+   * 避免重分析/规则重扫打断查看；复用路径仍重扫正文收起标记
+   * （懒渲染迟到的正文 / 被知乎替换的正文节点也一并收起）。
    */
   function renderBlockedBar(card, author, entry) {
     const existing = card.querySelector('.zys-blocked');
-    if (existing && existing.dataset.zysToken === author.token) return;
+    if (existing && existing.dataset.zysToken === author.token) {
+      collapseBlockedBody(card);
+      return;
+    }
     clearCardUI(card);
     clearPanels(card);
     card.classList.add('zys-rule-blocked');
+    collapseBlockedBody(card);
 
     const bar = document.createElement('div');
     bar.className = 'zys-blocked';
@@ -499,7 +519,7 @@
     bar.appendChild(label);
     bar.appendChild(viewBtn);
     bar.appendChild(unblockBtn);
-    card.prepend(bar);
+    insertBeforeBody(card, bar);
   }
 
   /**
@@ -901,6 +921,7 @@
       if (card) {
         const viewing = card.classList.toggle('zys-viewing');
         viewBtn.textContent = viewing ? '收起' : '查看';
+        if (!viewing) collapseBlockedBody(card); // 收起时重打标记（正文可能已被知乎替换为新节点）
       }
       return;
     }
@@ -1029,6 +1050,8 @@
       // 该卡片已按摘要分析过 → 文本真的变化时防抖后按全文重新分析
       if (node.closest(ZD.extract.BODY_SELECTOR)) {
         const card = node.closest(ZD.extract.CARD_SELECTOR);
+        // 屏蔽卡的正文懒渲染/被替换：重新打收起标记（不触发重分析，也不打断 [查看] 展开态）
+        if (card && card.classList.contains('zys-rule-blocked')) collapseBlockedBody(card);
         // 作者规则已应用的卡片（屏蔽/信任）不随正文变化重分析：
         // 规则由存储变化驱动，与内容无关（也避免重渲染打断占位条 [查看] 态）
         if (card && state.analyzed.has(card) && !state.ruleApplied.has(card) && !seen.has(card)) {

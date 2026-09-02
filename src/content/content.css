@@ -56,26 +56,26 @@
 
 /* ---------- 作者规则 UI ---------- */
 
-/* 屏蔽占位条：整卡占位。占位条以绝对定位覆盖整卡（正文/操作区不可见、不可交互，
- * 后续渐进渲染出的内容也始终被盖住）；[查看] 时回归文档流、正文露出。 */
-.zys-rule-blocked {
-  position: relative;
-}
-
+/* 屏蔽占位条：紧凑条，处于文档流内（正文原本的位置，头部下方）。
+ * 屏蔽时正文块被收起（JS 打 data-zys-collapsed 标记 → display:none），
+ * 卡片只留头部/操作栏骨架 + 一条提示，不再整卡遮罩占位；[查看] 展开正文。 */
 .zys-rule-blocked .zys-blocked {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 16px;
+  padding: 10px 16px;
+  margin: 8px 0;
   box-sizing: border-box;
   background: #f7f8fa;
   border: 1px solid #ebebeb;
   border-radius: 8px;
   color: #444;
   font-size: 14px;
+}
+
+/* 收起正文：屏蔽且未 [查看] 时隐藏被标记的正文块（懒渲染迟到的正文由 JS 重打标记） */
+.zys-rule-blocked:not(.zys-viewing) [data-zys-collapsed] {
+  display: none;
 }
 
 .zys-rule-blocked .zys-blocked .zys-blocked-label {
@@ -101,12 +101,6 @@
 
 .zys-rule-blocked .zys-blocked button:hover {
   background: rgba(23, 114, 246, 0.06);
-}
-
-/* [查看]：占位条回到文档流（顶部一条），正文在下方可见 */
-.zys-rule-blocked.zys-viewing .zys-blocked {
-  position: static;
-  margin: 0 0 8px;
 }
 
 /* 信任小签：极低调灰色胶囊，零判定卡片上唯一标记；点击展开小面板 */
