@@ -40,6 +40,7 @@
     $('apiKey').value = settings.apiKey || '';
     $('windowMode').value = settings.windowMode || 'full';
     $('hideAiBody').checked = settings.hideAiBody !== false;
+    $('declaredHideBody').checked = settings.declaredHideBody === true;
     // 提示词总显示完整内容：未设置（''）时展示内置默认，用户可直接基于它修改
     $('judgePrompt').value = settings.judgePrompt || ZD.CLOUD_SYSTEM_PROMPT;
     // 额外请求参数：直接显示存储值（默认 = DeepSeek 的 thinking disabled + temperature 0；
@@ -64,6 +65,7 @@
     s.apiKey = $('apiKey').value.trim();
     s.windowMode = $('windowMode').value;
     s.hideAiBody = $('hideAiBody').checked;
+    s.declaredHideBody = $('declaredHideBody').checked;
     s.cloudScoreWeight = Number($('cloudScoreWeight').value) / 100;
     // 覆盖形态：与内置默认完全一致时存 ''（等同使用内置），否则存全文
     const prompt = $('judgePrompt').value.trim();

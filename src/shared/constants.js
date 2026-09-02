@@ -45,6 +45,10 @@ Object.assign(globalThis.ZhihuDetector, {
      *  LLM 打分波动大（实测 std≈26），加权融合可显著降噪 */
     cloudScoreWeight: 0.6,
     hideAiBody: true,       // P1：AI 判定直接隐藏正文（0 关闭）
+    /** 已声明「包含 AI 辅助创作」的回答是否隐藏正文。
+     *  默认 false = 正文展开不折叠：作者已自认含 AI 辅助，不主动藏文。
+     *  独立于 hideAiBody（声明卡不受其控制）；勾选后行为同 hideAiBody（折叠 + 展开按钮）。 */
+    declaredHideBody: false,
     /** 用户自定义 AI 创作痕迹正则规则：[{id, name, pattern, weight, cap}] */
     customTraces: [],
     /** 二审 system 提示词（可编辑，默认 = CLOUD_SYSTEM_PROMPT） */
@@ -65,7 +69,7 @@ Object.assign(globalThis.ZhihuDetector, {
   VERDICT: { AI: 'ai', HUMAN: 'human', MIXED: 'mixed' },
 
   /** 判定等级（角标样式与文案的键） */
-  LEVEL: { CONFIRM_AI: 'confirm-ai', SUSPECT_AI: 'suspect-ai', NORMAL: 'normal', SKIP: 'skip' },
+  LEVEL: { CONFIRM_AI: 'confirm-ai', SUSPECT_AI: 'suspect-ai', NORMAL: 'normal', SKIP: 'skip', DECLARED: 'declared' },
 
   /** 二审预算/缓存维度（回答与文章隔离，互不挤占每页上限） */
   DIM: { ANSWER: 'answer', ARTICLE: 'article' },

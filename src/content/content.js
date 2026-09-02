@@ -1,7 +1,7 @@
 /**
  * 知乎照妖镜 — 内容脚本主逻辑
- * 流程：发现回答卡片 → 提取输入窗口 → 查覆盖 → 规则初审 →
- *      （模糊带且已配置 API）请求云端二审 → 渲染角标 / 理由面板 / 覆盖。
+ * 流程：发现回答卡片 → 作者规则 → 覆盖 → 创作声明跳过 → 提取输入窗口 →
+ *      规则初审 → （模糊带且已配置 API）请求云端二审 → 渲染角标 / 理由面板 / 覆盖。
  * 依赖（按 manifest 加载顺序）：constants.js, storage.js, traces.js,
  *      rules.js, extract.js。
  */
@@ -29,8 +29,12 @@
      *  正文变化重分析的指纹：只有输入窗口文本真的变化才重分析，
      *  避免知乎在 .RichContent 内追加操作栏/热评等 UI 节点触发无谓重分析。 */
     cardText: new WeakMap(),
+    /** 卡片 → 最近一次分析时的「包含 AI 辅助创作」声明状态（true/false）。
+     *  声明挂在 .ContentItem-time 内，作者可后续添加/移除——观察器按此
+     *  翻转触发重扫（声明被移除后自动回到正常判定）。 */
+    cardDeclared: new WeakMap(),
     /** 文章详情页状态（同一时刻至多一篇；SPA 导航时按 pathname 重建） */
-    article: { id: null, card: null, analyzed: false, text: '', inFlight: null },
+    article: { id: null, card: null, analyzed: false, text: '', declared: false, inFlight: null },
     /** 上次见到的 pathname（文章页 SPA 导航检测） */
     lastPath: location.pathname,
   };
@@ -175,6 +179,8 @@
       const isArticle = isArticleListCard(card);
       const rawId = isArticle ? ZD.extract.getArticleId(card) : ZD.extract.getAnswerId(card);
       const overrideKey = isArticle && rawId ? articleOverrideKey(rawId) : rawId;
+      // 声明状态随分析记录：观察器按此检测「作者后续添加/移除创作声明」的翻转
+      state.cardDeclared.set(card, ZD.extract.hasAiDeclaration(card));
 
       // 0) 作者级硬规则（优先级最高，先于卡片覆盖与引擎判定）：
       //    屏蔽 → 正文收起 + 占位条；信任 → 零判定小签。均不产生任何提取与判定调用。
@@ -189,7 +195,18 @@
         return;
       }
 
-      // 2) 文本稳定化。正文提取为空（无正文块）→ 不判定也不显示角标
+      // 2) 官方创作声明跳过（覆盖已先行裁决，2B：手动覆盖优先于声明）：
+      //    作者在时间区自认「包含 AI 辅助创作」→ 跳过整条评分管线——
+      //    不提取文本、不跑规则、不进云端二审、不消费预算；minChars 与
+      //    正文变化重分析同样跳过。声明状态翻转由观察器驱动（见下）。
+      if (state.cardDeclared.get(card)) {
+        renderDeclarationBadge(card, overrideKey);
+        state.analyzed.add(card);
+        state.cardText.set(card, extractCardText(card));
+        return;
+      }
+
+      // 3) 文本稳定化。正文提取为空（无正文块）→ 不判定也不显示角标
       const text = await extractStableText(() => extractCardText(card));
       if (!text) {
         state.analyzed.add(card);
@@ -197,7 +214,7 @@
         return;
       }
 
-      // 3) 字数下限：内容本身少于 minChars 判 AI 无意义，以"跳过"角标标记（0 关闭）。
+      // 4) 字数下限：内容本身少于 minChars 判 AI 无意义，以"跳过"角标标记（0 关闭）。
       //    回答用回答下限、文章列表卡用文章下限（折叠摘要常 <300 → 跳过）
       const minChars = isArticle ? state.settings.articleMinChars || 0 : state.settings.minChars || 0;
       const rawLen = isArticle ? ZD.extract.articleListRawLength(card) : ZD.extract.rawLength(card);
@@ -208,7 +225,7 @@
         return;
       }
 
-      // 4) 规则初审（含用户自定义正则规则）
+      // 5) 规则初审（含用户自定义正则规则）
       const rule = ZD.engine.score(text, state.settings.customTraces || []);
       let result = {
         source: 'rule',
@@ -217,7 +234,7 @@
         answerId: overrideKey,
       };
 
-      // 5) 云端二审：已配置 API 且（手动"重新判定"强制 或 分数落入模糊带）。
+      // 6) 云端二审：已配置 API 且（手动"重新判定"强制 或 分数落入模糊带）。
       //    经内容侧队列限流，不丢弃；携带一审结果作上下文。
       //    文章卡二审走 article 预算维度（与回答隔离）。
       const forceRejudge = state.forceRejudge.delete(overrideKey);
@@ -299,6 +316,7 @@
       state.article.id = articleId;
       state.article.card = card;
       state.article.analyzed = false;
+      state.article.declared = ZD.extract.hasAiDeclaration(card);
 
     // 0) 作者规则（复用回答卡组件；占位条/信任小签同样作用于文章容器）
     if (applyAuthorRuleIfAny(card)) {
@@ -315,7 +333,15 @@
       return;
     }
 
-    // 2) 提取：文章专用（跳标题、头尾抽样、文章设置组），稳定化防渐进渲染。
+    // 2) 创作声明跳过（与回答卡共用检测与渲染；覆盖优先，2B）：
+    //    文章详情页 .ContentItem-time 同样带「包含 AI 辅助创作」声明。
+    if (state.article.declared) {
+      renderDeclarationBadge(card, overrideKey);
+      state.article.analyzed = true;
+      return;
+    }
+
+    // 3) 提取：文章专用（跳标题、头尾抽样、文章设置组），稳定化防渐进渲染。
     //    正文可能懒渲染（init 时 .Post-content 未出现 → 文本为空）：此时记录空指纹，
     //    观察器发现正文文本变化后再重试。
     const text = await extractStableText(() => ZD.extract.extractArticleText(card, state.settings));
@@ -325,7 +351,7 @@
       return;
     }
 
-    // 3) 字数下限（文章设置组独立）
+    // 4) 字数下限（文章设置组独立）
     const minChars = state.settings.articleMinChars || 0;
     if (minChars > 0 && ZD.extract.articleRawLength(card) < minChars) {
       state.article.analyzed = true;
@@ -333,11 +359,11 @@
       return;
     }
 
-    // 4) 规则初审（阈值与回答共享）
+    // 5) 规则初审（阈值与回答共享）
     const rule = ZD.engine.score(text, state.settings.customTraces || []);
     let result = { source: 'rule', score: rule.score, hits: rule.hits, answerId: overrideKey };
 
-    // 5) 云端二审（维度 = article，预算独立；手动"重新判定"强制绕过缓存）
+    // 6) 云端二审（维度 = article，预算独立；手动"重新判定"强制绕过缓存）
     const forceRejudge = state.forceRejudge.delete(overrideKey);
     const cloudOn = state.settings.cloudEnabled && !!state.settings.apiKey;
     if (cloudOn && (forceRejudge || cloudEligible(rule.score, state.settings))) {
@@ -384,6 +410,7 @@
     [ZD.LEVEL.SUSPECT_AI]: 'zys-level-suspect-ai',
     [ZD.LEVEL.NORMAL]: 'zys-level-normal',
     [ZD.LEVEL.SKIP]: 'zys-level-skip',
+    [ZD.LEVEL.DECLARED]: 'zys-level-declared',
   };
 
   /** 卡片正文元素（未渲染正文时返回 null） */
@@ -701,6 +728,87 @@
     const actions = document.createElement('div');
     actions.className = 'zys-actions';
     if (appendAuthorActions(actions, card)) panel.appendChild(actions);
+    bindPanelToggle(badge, panel);
+    insertBeforeBody(card, panel);
+  }
+
+  /**
+   * 渲染"已声明"角标：作者带「包含 AI 辅助创作」官方创作声明 → 跳过检测直接给结论。
+   * 角标分数区显示「声明」、等级「AI」、meta「作者声明」；面板引用声明原文 +
+   * 说明检测已跳过。判定按钮（认为人工 / 认为 AI / 重新判定）全部禁用（1A），
+   * 仅保留作者级操作（屏蔽 / 信任该作者）。正文隐藏由独立设置 declaredHideBody
+   * 控制，默认展开——作者已自认含 AI 辅助创作，不主动藏文；勾选后行为同 hideAiBody
+   * （折叠 + 展开原文按钮）。
+   */
+  function renderDeclarationBadge(card, answerId) {
+    if (applyAuthorRuleIfAny(card)) return; // 渲染时刻作者规则优先（竞态守卫）
+    clearPanels(card);
+    const badge = badgeOf(card);
+    badge.className = 'zys-badge zys-level-declared';
+    badge.dataset.zysAid = answerId || '';
+    badge.textContent = '';
+
+    const scoreEl = document.createElement('span');
+    scoreEl.className = 'zys-score';
+    scoreEl.textContent = '声明';
+    badge.appendChild(scoreEl);
+
+    const labelEl = document.createElement('span');
+    labelEl.className = 'zys-level';
+    labelEl.textContent = 'AI';
+    badge.appendChild(labelEl);
+
+    const metaEl = document.createElement('span');
+    metaEl.className = 'zys-meta';
+    metaEl.textContent = '作者声明';
+    badge.appendChild(metaEl);
+
+    const panel = document.createElement('div');
+    panel.className = 'zys-panel';
+    panel.hidden = true;
+
+    const titleEl = document.createElement('div');
+    titleEl.className = 'zys-panel-title';
+    titleEl.textContent = '判定：已声明包含 AI 辅助创作';
+    panel.appendChild(titleEl);
+
+    const quote = document.createElement('div');
+    quote.className = 'zys-declared-quote';
+    quote.textContent = '作者已添加创作声明：「包含 AI 辅助创作，作者对内容负责」——检测已跳过，不评分、不二审。';
+    panel.appendChild(quote);
+
+    const p = document.createElement('p');
+    p.className = 'zys-empty';
+    p.textContent = '作者已自认内容含 AI 辅助创作，无需判定。';
+    panel.appendChild(p);
+
+    // 1A：三个判定按钮全部禁用；作者级操作保留（无作者卡自动不显示）
+    const actions = document.createElement('div');
+    actions.className = 'zys-actions';
+    actions.appendChild(actionButton('认为人工', ZD.VERDICT.HUMAN));
+    actions.appendChild(actionButton('认为 AI', ZD.VERDICT.AI));
+    actions.appendChild(actionButton('重新判定', 'rejudge'));
+    actions.querySelectorAll('button').forEach((b) => {
+      b.disabled = true;
+    });
+    appendAuthorActions(actions, card);
+    panel.appendChild(actions);
+
+    // declaredHideBody：默认展开（false）；勾选后折叠 + 展开原文按钮（行为同 hideAiBody）
+    const bodyEl = bodyOf(card);
+    if (bodyEl) {
+      const hideBody = state.settings.declaredHideBody === true;
+      bodyEl.style.display = hideBody ? 'none' : '';
+      if (hideBody) {
+        const expandBtn = document.createElement('button');
+        expandBtn.type = 'button';
+        expandBtn.dataset.zysExpand = '1';
+        expandBtn.textContent = '展开原文';
+        expandBtn.className = 'zys-expand-btn';
+        panel.appendChild(expandBtn);
+      }
+    }
+
     bindPanelToggle(badge, panel);
     insertBeforeBody(card, panel);
   }
@@ -1037,9 +1145,13 @@
       else if (state.article.card && ZD.extract.extractArticleText(state.article.card, state.settings) !== state.article.text) {
         analyzeArticle(true);
       }
+      // 创作声明翻转（作者后续添加/移除）→ 文章重判
+      else if (state.article.card && ZD.extract.hasAiDeclaration(state.article.card) !== !!state.article.declared) {
+        analyzeArticle(true);
+      }
     } else if (state.article.analyzed && state.article.card) {
       cleanupArticleUI(state.article.card);
-      state.article = { id: null, card: null, analyzed: false, text: '', inFlight: null };
+      state.article = { id: null, card: null, analyzed: false, text: '', declared: false, inFlight: null };
     }
 
     const cards = [];
@@ -1079,6 +1191,19 @@
       if (anc && !state.analyzed.has(anc) && !seen.has(anc) && anc.querySelector(ZD.extract.BODY_SELECTOR)) {
         seen.add(anc);
         cards.push(anc);
+      }
+      }
+    // 创作声明翻转（作者后续添加/移除「包含 AI 辅助创作」，变化发生在时间区而非
+    // 正文 → 正文指纹分支不触发）：全卡快照对比。
+    // 不依赖批次节点定位卡片：声明元素被整个移除时是 removedNodes，已脱离 DOM、
+    // closest() 无法回溯卡片——全扫对添加/移除/替换三个方向统一覆盖。
+    // 开销：每批一次 querySelector('.ContentItem-time')+正则 × 已分析卡数，
+    // 250ms 批次节流下可忽略；命中即走 scheduleReanalyze 防抖（合并多次翻转）。
+    // 作者规则已应用（屏蔽/信任）的卡由存储驱动，声明翻转不打断其 UI。
+    for (const card of ZD.extract.findCards(document)) {
+      if (!state.analyzed.has(card) || state.ruleApplied.has(card)) continue;
+      if (ZD.extract.hasAiDeclaration(card) !== state.cardDeclared.get(card)) {
+        scheduleReanalyze(card);
       }
     }
     if (cards.length) analyzeCards(cards);

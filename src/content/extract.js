@@ -88,6 +88,24 @@ ZD.extract = {
     return { token, name };
   },
 
+  /** 官方「包含 AI 辅助创作」创作声明文本（见 zhuanlan.zhihu.com/p/624717941 治理细则）。
+   *  挂在卡片时间区 .ContentItem-time 内（SSR 首帧即存在，回答卡/文章卡/文章详情页共用）；
+   *  外层 div 是 hash 类名（实测 css-18biwo），不可依赖，只匹配稳定文本。 */
+  AI_DECLARATION_RE: /包含\s*AI\s*辅助创作/,
+
+  /**
+   * 卡片是否带「包含 AI 辅助创作」官方创作声明。
+   * 作者已自认内容含 AI 辅助 → 跳过整条评分管线（提取/规则/二审）。
+   * @param {Element} card 回答卡 / 文章列表卡 / 文章详情容器
+   * @returns {boolean}
+   */
+  hasAiDeclaration(card) {
+    if (!card) return false;
+    const t = card.querySelector('.ContentItem-time');
+    if (!t) return false;
+    return ZD.extract.AI_DECLARATION_RE.test(t.textContent || '');
+  },
+
   /**
    * 从卡片提取回答 ID：优先 /answer/<aid> 链接。
    * @returns {string|null}

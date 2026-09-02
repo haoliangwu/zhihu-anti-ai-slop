@@ -45,6 +45,32 @@
 .zys-level-suspect-ai { color: #e8890c; background: rgba(232, 137, 12, 0.08); border-color: rgba(232, 137, 12, 0.25); }
 .zys-level-normal     { color: #0a8f4e; background: rgba(10, 143, 78, 0.08); border-color: rgba(10, 143, 78, 0.22); }
 .zys-level-skip       { color: #8590a6; background: rgba(133, 144, 166, 0.1);  border-color: rgba(133, 144, 166, 0.18); }
+/* 已声明「包含 AI 辅助创作」：巧克力紫调（与知乎 AI 标识同系），跳过检测的终态角标 */
+.zys-level-declared   { color: #7b5cff; background: rgba(123, 92, 255, 0.08); border-color: rgba(123, 92, 255, 0.24); }
+
+/* 声明面板：引用块引用知乎官方声明原文 */
+.zys-declared-quote {
+  margin: 0 0 6px;
+  padding: 8px 10px;
+  border-left: 3px solid #7b5cff;
+  background: rgba(123, 92, 255, 0.05);
+  border-radius: 4px;
+  color: #444;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* 声明卡判定按钮禁用（1A：认为人工/认为 AI/重新判定置灰不可点，仅保留作者级操作） */
+.zys-actions button:disabled {
+  border-color: #d3d9e0;
+  background: #f7f8fa;
+  color: #8590a6;
+  cursor: not-allowed;
+}
+
+.zys-actions button:disabled:hover {
+  background: #f7f8fa;
+}
 
 /* 二审进行中（初次分析）：灰调反馈角标，显示规则一审分数 + "二审中"，不可点击 */
 .zys-badge.zys-pending {
